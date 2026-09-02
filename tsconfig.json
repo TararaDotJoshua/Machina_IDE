@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "useDefineForClassFields": true,
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "jsx": "react-jsx",
+    "allowJs": false,
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "types": ["node", "vite/client"],
+    "baseUrl": ".",
+    "paths": {
+      "@mechatronics-ide/core": ["packages/core/src/index.ts"],
+      "@mechatronics-ide/plugin-sdk": ["packages/plugin-sdk/src/index.ts"]
+    }
+  },
+  "include": ["src", "packages", "plugins", "tests", "electron.vite.config.ts", "scripts"],
+  "exclude": ["node_modules", "out", "dist", "release", "plugins/*/dist"]
+}
