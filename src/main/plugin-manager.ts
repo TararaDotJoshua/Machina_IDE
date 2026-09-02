@@ -344,6 +344,10 @@ export class PluginManager extends EventEmitter {
       case 'project.readAsset':
         this.assertPermission(plugin, 'project.read');
         return this.projects.readAsset(String(params.relativePath ?? ''));
+      case 'project.deleteAsset':
+        this.assertPermission(plugin, 'project.write');
+        await this.projects.deleteAsset(String(params.relativePath ?? ''));
+        return null;
       case 'files.open': {
         this.assertPermission(plugin, 'file.open');
         const options = params.options as { title?: unknown; extensions?: unknown };

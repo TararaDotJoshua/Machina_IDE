@@ -1,4 +1,4 @@
-# Machina IDE 1.0.0-beta.5
+# Machina IDE 1.0.0-beta.6
 
 Machina IDE is a desktop-first, web-portable engineering workspace for mechatronics projects. The core application provides project persistence, rearrangeable workspaces, an interactive Three.js viewport, and a permission-gated extension runtime.
 
@@ -11,10 +11,10 @@ Engineering capabilities are supplied by extensions. The core never fabricates g
 - Apply System, Mechanical, Electrical, and Software workspace layouts without restricting window access.
 - Organize project items into folders, rename them inline, and rearrange them by drag-and-drop or context-menu actions.
 - Select core and plugin-owned project items reliably and edit supported values directly in the Inspector.
-- Navigate a Three.js engineering viewport that is ready for geometry supplied by extensions.
+- View all geometry supplied by extensions together in one system-level Three.js viewport.
 - Review extension diagnostics, worker activity, and application output.
 - Discover, validate, enable, disable, reload, and isolate user-installed extensions.
-- Import `.step` and `.stp` models into an extension-owned 3D window using a cancellable local worker, then separate imported models into selectable bodies.
+- Import `.step` and `.stp` models into the system viewport using a cancellable local worker, separate them into selectable bodies, and delete imports with their cached geometry.
 - Enter full screen with F11 and choose a persistent 80–150% interface scale from the View menu.
 - Receive beta releases through the built-in updater, which rejects invalid, equal, and older versions.
 
@@ -24,7 +24,7 @@ New projects are empty by design. Machina does not seed sample assemblies or dis
 
 Packaged Windows builds check the GitHub Releases beta channel shortly after startup and every four hours. Updates download in the background; Machina offers **Restart now** or **Later** and saves the open project before installing. Updates can also be checked from Help → Check for Updates.
 
-Every release must be committed and pushed to `main`, followed by a beta tag matching the package version, such as `v1.0.0-beta.5`. The tag runs the release workflow, which validates the version, runs the complete verified build, and publishes the NSIS installer, blockmap, `beta.yml`, and `latest.yml` compatibility metadata.
+Every release must be committed and pushed to `main`, followed by a beta tag matching the package version, such as `v1.0.0-beta.6`. The tag runs the release workflow, which validates the version, runs the complete verified build, and publishes the NSIS installer, blockmap, `beta.yml`, and `latest.yml` compatibility metadata.
 
 ## Run and build
 

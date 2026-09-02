@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { mkdir, readFile, rename, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { projectDocumentSchema, type ProjectDocument, type ProjectItem } from '@mechatronics-ide/core';
@@ -86,6 +86,7 @@ export class ProjectService extends EventEmitter {
   async setPluginState(pluginId: string, state: unknown): Promise<void> {
     await this.transaction(`Update ${pluginId} state`, (draft) => {
       draft.pluginState[pluginId] = state;
+      pruneTreePlacements(draft);
     });
   }
 
@@ -137,15 +138,28 @@ export class ProjectService extends EventEmitter {
 
   async readAsset(relativePath: string): Promise<unknown> {
     if (!this.projectRoot) throw new Error('No project is open');
+    const candidate = this.resolveAssetPath(relativePath);
+    const info = await stat(candidate);
+    if (!info.isFile() || info.size > 128 * 1024 * 1024) throw new Error('Project asset is unavailable or too large');
+    return JSON.parse(await readFile(candidate, 'utf8')) as unknown;
+  }
+
+  async deleteAsset(relativePath: string): Promise<void> {
+    const candidate = this.resolveAssetPath(relativePath);
+    await unlink(candidate).catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'ENOENT') throw error;
+    });
+  }
+
+  private resolveAssetPath(relativePath: string): string {
+    if (!this.projectRoot) throw new Error('No project is open');
     const assetsRoot = resolve(this.projectRoot, 'assets');
     const candidate = resolve(this.projectRoot, relativePath);
     const childPath = relative(assetsRoot, candidate);
     if (!childPath || childPath === '..' || childPath.startsWith(`..${sep}`) || isAbsolute(childPath)) {
       throw new Error('Asset path must stay inside the project assets directory');
     }
-    const info = await stat(candidate);
-    if (!info.isFile() || info.size > 128 * 1024 * 1024) throw new Error('Project asset is unavailable or too large');
-    return JSON.parse(await readFile(candidate, 'utf8')) as unknown;
+    return candidate;
   }
 
   private migrate(raw: unknown): ProjectDocument {
@@ -176,6 +190,20 @@ function findPluginRecord(pluginState: Record<string, unknown>, id: string): Rec
     return undefined;
   };
   return visit(pluginState);
+}
+
+function pruneTreePlacements(document: ProjectDocument): void {
+  const ids = new Set<string>();
+  const visit = (value: unknown): void => {
+    if (Array.isArray(value)) { value.forEach(visit); return; }
+    if (!value || typeof value !== 'object') return;
+    const record = value as Record<string, unknown>;
+    if (typeof record.id === 'string') ids.add(record.id);
+    Object.values(record).forEach(visit);
+  };
+  visit(document.treeItems);
+  visit(document.pluginState);
+  for (const id of Object.keys(document.treePlacements)) if (!ids.has(id)) delete document.treePlacements[id];
 }
 
 function validateItemPatch(patch: Record<string, unknown>): Record<string, string | number | boolean | null> {

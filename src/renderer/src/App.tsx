@@ -56,6 +56,7 @@ interface DockCandidate { target: WorkspaceWindowId; zone: DockZone }
 interface WorkspacePreset { id: WorkspacePresetId; title: string; storeWorkspace: string; windows: Partial<Record<WorkspaceWindowId, Omit<WindowRect, 'z'>>> }
 interface PluginWindowDescriptor extends PluginWindowContribution { pluginId: string; runtimeId: string }
 interface WindowMeta { title: string; icon: React.ReactNode; plugin?: boolean }
+interface SystemSceneSource { id: string; assetPath: string; bodies: Array<{ meshIndex: number; visible: boolean }> }
 
 const WORKSPACE_PRESETS: WorkspacePreset[] = [
   { id: 'system', title: 'System', storeWorkspace: 'project', windows: {
@@ -76,7 +77,7 @@ const CORE_WINDOWS: CoreWindowId[] = ['project', 'viewer', 'console', 'inspector
 
 export function App(): React.JSX.Element {
   const { snapshot, setSnapshot, paletteOpen, setPaletteOpen, notification, notify, updateState, setUpdateState } = useIdeStore();
-  const pluginWindows = (snapshot?.contributions ?? []).flatMap((entry) => entry.contributes.windows.map((window) => ({ ...window, pluginId: entry.pluginId, runtimeId: `plugin:${entry.pluginId}:${window.id}` })));
+  const pluginWindows = (snapshot?.contributions ?? []).flatMap((entry) => entry.contributes.windows.filter((window) => window.kind !== 'viewportScene').map((window) => ({ ...window, pluginId: entry.pluginId, runtimeId: `plugin:${entry.pluginId}:${window.id}` })));
   const allWindows = [...CORE_WINDOWS, ...pluginWindows.map((window) => window.runtimeId)];
   const [presetId, setPresetId] = useState<WorkspacePresetId>('system');
   const [windowRects, setWindowRects] = useState<Partial<Record<WorkspaceWindowId, WindowRect>>>(() => createPresetRects('system', []));
@@ -377,6 +378,11 @@ function Explorer(): React.JSX.Element {
   const [renamingId, setRenamingId] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<{ item: ProjectItem | VirtualItem; parentId: string | null; index: number; x: number; y: number } | null>(null);
   const notify = useIdeStore((state) => state.notify);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setContextMenu(null); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
   const runProjectAction = (action: () => Promise<unknown>, success: string) => void action().then((result) => { if (result !== null && result !== undefined) notify(success); }).catch((error) => notify(error instanceof Error ? error.message : String(error)));
   if (workspace === 'extensions') return <Extensions />;
   const fullTree = getProjectTree(snapshot);
@@ -413,6 +419,7 @@ function Explorer(): React.JSX.Element {
       {contextMenu && <div className="tree-context-menu" style={{ left: contextMenu.x, top: contextMenu.y }} onClick={(event) => event.stopPropagation()}>
         <button onClick={() => { setRenamingId(contextMenu.item.id); setContextMenu(null); }}><Pencil size={13} /> Rename <kbd>F2</kbd></button>
         {contextMenu.item.type === 'dev.machina.step.model' && <button onClick={() => { runProjectAction(() => window.machina.commands.execute('machina.step.breakIntoBodies', { target: contextMenu.item.id }), 'STEP model separated into bodies'); setContextMenu(null); }}><Boxes size={13} /> Separate into bodies</button>}
+        {contextMenu.item.type === 'dev.machina.step.model' && <button className="danger" onClick={() => { const item = contextMenu.item; setContextMenu(null); if (window.confirm(`Delete STEP import “${item.name}”? This removes the model and its cached geometry from this project.`)) runProjectAction(() => window.machina.commands.execute('machina.step.deleteImport', { target: item.id }), `${item.name} deleted`); }}><Trash2 size={13} /> Delete STEP import</button>}
         <div />
         <button disabled={contextMenu.index === 0} onClick={() => moveRelative(-1)}><ArrowUp size={13} /> Move up</button>
         <button disabled={contextMenu.index >= siblings.length - 1} onClick={() => moveRelative(1)}><ArrowDown size={13} /> Move down</button>
@@ -478,13 +485,65 @@ function WorkArea({ commands }: { commands: CommandItem[] }): React.JSX.Element 
   const project = useIdeStore((state) => state.snapshot?.project);
   const [renderMode, setRenderMode] = useState<'shaded' | 'wireframe'>('shaded');
   const [frameToken, setFrameToken] = useState(0);
+  const [scene, setScene] = useState<SceneAsset | null>(null);
+  const [sceneLoading, setSceneLoading] = useState(false);
+  const [sceneError, setSceneError] = useState<string | null>(null);
+  const sceneSources = useMemo(() => contributions.flatMap((entry) => {
+    const pluginState = project?.pluginState[entry.pluginId] as Record<string, unknown> | undefined;
+    return entry.contributes.windows.filter((window) => window.kind === 'viewportScene').flatMap((window) => {
+      const records = pluginState?.[window.stateKey];
+      if (!Array.isArray(records)) return [];
+      return records.flatMap((record): SystemSceneSource[] => {
+        if (!record || typeof record !== 'object') return [];
+        const model = record as Record<string, unknown>;
+        if (typeof model.id !== 'string' || typeof model.assetPath !== 'string') return [];
+        const bodies = Array.isArray(model.bodies) ? model.bodies.flatMap((body) => {
+          if (!body || typeof body !== 'object') return [];
+          const value = body as Record<string, unknown>;
+          return typeof value.meshIndex === 'number' ? [{ meshIndex: value.meshIndex, visible: value.visible !== false }] : [];
+        }) : [];
+        return [{ id: model.id, assetPath: model.assetPath, bodies }];
+      });
+    });
+  }), [contributions, project]);
+  const sceneSourceSignature = JSON.stringify(sceneSources);
+  useEffect(() => {
+    let active = true;
+    const sources = JSON.parse(sceneSourceSignature) as SystemSceneSource[];
+    setSceneError(null);
+    if (sources.length === 0) { setScene(null); setSceneLoading(false); return () => { active = false; }; }
+    setSceneLoading(true);
+    setScene(null);
+    void (async () => {
+      const meshes: SceneAsset['meshes'] = [];
+      let failures = 0;
+      for (const source of sources) {
+        if (!active) return;
+        try {
+          const parsed = sceneAssetSchema.safeParse(await window.machina.project.readAsset(source.assetPath));
+          if (!parsed.success) throw new Error(`Invalid scene asset: ${source.assetPath}`);
+          const visibleMeshes = source.bodies.length === 0
+            ? parsed.data.meshes
+            : parsed.data.meshes.filter((_mesh, index) => source.bodies.find((body) => body.meshIndex === index)?.visible !== false);
+          meshes.push(...visibleMeshes.map((mesh, index) => ({ ...mesh, name: `${source.id}:${mesh.name || `Mesh ${index + 1}`}` })));
+          if (active && meshes.length > 0) setScene({ version: 1, meshes: [...meshes] });
+        } catch {
+          failures += 1;
+        }
+      }
+      if (!active) return;
+      setSceneError(failures > 0 ? `${failures} imported model${failures === 1 ? '' : 's'} could not be loaded.` : null);
+      setSceneLoading(false);
+    })();
+    return () => { active = false; };
+  }, [sceneSourceSignature]);
   if (workspace === 'extensions') return <PluginLibrary />;
   const toolbar = contributions.flatMap((item) => item.contributes.toolbarActions).map((action) => commands.find((command) => command.id === action.command)).filter(Boolean) as CommandItem[];
   return (
     <section className="work-area">
-      <EditorTabs icon={<Box size={13} />} title="3D Viewport" />
+      <EditorTabs icon={<Box size={13} />} title="System 3D Viewport" />
       <div className="viewport-toolbar"><div><button className="active" title="Selection mode"><MousePointer2 size={15} /></button><button title="Frame model" onClick={() => setFrameToken((value) => value + 1)}><Maximize2 size={15} /></button></div><div className="toolbar-center"><button className={renderMode === 'shaded' ? 'active' : ''} onClick={() => setRenderMode('shaded')}>Shaded</button><button className={renderMode === 'wireframe' ? 'active' : ''} onClick={() => setRenderMode('wireframe')}>Wireframe</button>{toolbar.map((command) => <button key={command.id} className="plugin-toolbar" onClick={() => void window.machina.commands.execute(command.id, { target: selectedId }).then((result) => notify(String(result)))}><Sparkles size={13} />{command.title}</button>)}</div></div>
-      <Viewport key={frameToken} renderMode={renderMode} emptyTitle={project ? 'No 3D scene available' : 'No project open'} emptyMessage={project ? 'Open a geometry extension window to view imported scene data.' : 'Create or open a project to begin.'} />
+      <Viewport key={frameToken} renderMode={renderMode} scene={scene} emptyTitle={project ? (sceneLoading ? 'Loading system…' : sceneError ?? 'No 3D geometry in this system') : 'No project open'} emptyMessage={project ? (sceneError ?? 'Import geometry to add it to the system viewport.') : 'Create or open a project to begin.'} />
     </section>
   );
 }
@@ -495,52 +554,12 @@ function EditorTabs({ icon, title }: { icon: React.ReactNode; title: string }): 
 
 function PluginWindow({ descriptor }: { descriptor: PluginWindowDescriptor }): React.JSX.Element {
   const snapshot = useIdeStore((state) => state.snapshot);
-  const selectedId = useIdeStore((state) => state.selectedId);
   const state = snapshot?.project?.pluginState[descriptor.pluginId] as Record<string, unknown> | undefined;
   const value = state?.[descriptor.stateKey];
   if (descriptor.kind === 'json') {
     return <section className="work-area"><EditorTabs icon={<Package size={13} />} title={descriptor.title} /><pre className="plugin-json-view">{JSON.stringify(value ?? null, null, 2)}</pre></section>;
   }
-  return <PluginSceneWindow descriptor={descriptor} records={Array.isArray(value) ? value : []} selectedId={selectedId} />;
-}
-
-function PluginSceneWindow({ descriptor, records, selectedId }: { descriptor: PluginWindowDescriptor; records: unknown[]; selectedId: string | null }): React.JSX.Element {
-  const models = useMemo(() => records.filter((value): value is Record<string, unknown> => Boolean(value && typeof value === 'object' && typeof (value as Record<string, unknown>).assetPath === 'string')), [records]);
-  const model = models.find((item) => item.id === selectedId || (Array.isArray(item.bodies) && item.bodies.some((body) => body && typeof body === 'object' && (body as Record<string, unknown>).id === selectedId))) ?? models.at(-1);
-  const bodies = useMemo(() => Array.isArray(model?.bodies) ? model.bodies.filter((body): body is Record<string, unknown> => Boolean(body && typeof body === 'object')) : [], [model]);
-  const selectedBody = bodies.find((body) => body.id === selectedId);
-  const [scene, setScene] = useState<SceneAsset | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [renderMode, setRenderMode] = useState<'shaded' | 'wireframe'>('shaded');
-  const [frameToken, setFrameToken] = useState(0);
-  const assetPath = typeof model?.assetPath === 'string' ? model.assetPath : null;
-  useEffect(() => {
-    let active = true;
-    setScene(null);
-    setError(null);
-    if (!assetPath) return () => { active = false; };
-    setLoading(true);
-    void window.machina.project.readAsset(assetPath).then((value) => {
-      const parsed = sceneAssetSchema.safeParse(value);
-      if (!parsed.success) throw new Error('The imported scene asset is invalid');
-      const visibleMeshes = selectedBody && typeof selectedBody.meshIndex === 'number'
-        ? parsed.data.meshes.filter((_mesh, index) => index === selectedBody.meshIndex)
-        : bodies.length > 0
-          ? parsed.data.meshes.filter((_mesh, index) => bodies.find((body) => body.meshIndex === index)?.visible !== false)
-          : parsed.data.meshes;
-      if (active) setScene({ ...parsed.data, meshes: visibleMeshes });
-    }).catch((reason) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)); }).finally(() => { if (active) setLoading(false); });
-    return () => { active = false; };
-  }, [assetPath, bodies, selectedBody]);
-  const title = typeof selectedBody?.name === 'string' ? selectedBody.name : typeof model?.name === 'string' ? model.name : descriptor.title;
-  return (
-    <section className="work-area">
-      <EditorTabs icon={<Package size={13} />} title={title} />
-      <div className="viewport-toolbar"><div><button title="Frame model" onClick={() => setFrameToken((value) => value + 1)}><Maximize2 size={15} /></button></div><div className="toolbar-center"><button className={renderMode === 'shaded' ? 'active' : ''} onClick={() => setRenderMode('shaded')}>Shaded</button><button className={renderMode === 'wireframe' ? 'active' : ''} onClick={() => setRenderMode('wireframe')}>Wireframe</button></div></div>
-      <Viewport key={`${frameToken}-${String(model?.assetPath ?? '')}`} renderMode={renderMode} scene={scene} emptyTitle={loading ? 'Loading model…' : error ?? 'No STEP model imported'} emptyMessage={error ? 'Re-import the source file or review the Output window for details.' : 'Run “Import STEP Model…” from the command palette.'} />
-    </section>
-  );
+  return <div className="empty-state"><Package size={28} /><strong>{descriptor.title}</strong><span>This plugin window type is unavailable.</span></div>;
 }
 
 function PluginLibrary(): React.JSX.Element {

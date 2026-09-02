@@ -224,6 +224,8 @@ kbd { font-family: 'JetBrains Mono', monospace; color: #8997a5; background: #182
 .tree-context-menu { position: fixed; z-index: 250; min-width: 205px; max-height: 360px; overflow: auto; padding: 5px; border: 1px solid #354655; border-radius: 5px; background: #131b24; box-shadow: 0 16px 45px #000b; }
 .tree-context-menu button { width: 100%; min-height: 28px; display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: 3px; background: transparent; color: #bdc8d1; font-size: 10px; text-align: left; }
 .tree-context-menu button:hover:not(:disabled) { background: #1c2c37; color: #e5edf2; }
+.tree-context-menu button.danger { color: #ff8c8c; }
+.tree-context-menu button.danger:hover:not(:disabled) { background: #3a2025; color: #ffb1b1; }
 .tree-context-menu button:disabled { opacity: .35; }
 .tree-context-menu button kbd { margin-left: auto; color: #6e7d89; }
 .tree-context-menu > div { height: 1px; margin: 4px; background: #28343e; }

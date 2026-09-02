@@ -1,7 +1,7 @@
 {
   "id": "dev.machina.step-import",
   "name": "STEP Import",
-  "version": "1.0.0-beta.5",
+  "version": "1.0.0-beta.6",
   "engines": {
     "mechatronicsIDE": ">=1.0.0-beta.2 <2.0.0"
   },
@@ -9,6 +9,7 @@
   "activationEvents": [
     "onCommand:machina.step.import",
     "onCommand:machina.step.breakIntoBodies",
+    "onCommand:machina.step.deleteImport",
     "onProjectItem:dev.machina.step.model"
   ],
   "resources": [
@@ -36,6 +37,11 @@
       {
         "id": "machina.step.breakIntoBodies",
         "title": "Separate STEP Model into Bodies",
+        "category": "STEP Import"
+      },
+      {
+        "id": "machina.step.deleteImport",
+        "title": "Delete STEP Import",
         "category": "STEP Import"
       }
     ],
@@ -74,7 +80,8 @@
       }
     ],
     "explorerContextMenus": [
-      { "command": "machina.step.breakIntoBodies", "when": "itemType == dev.machina.step.model", "group": "geometry" }
+      { "command": "machina.step.breakIntoBodies", "when": "itemType == dev.machina.step.model", "group": "geometry" },
+      { "command": "machina.step.deleteImport", "when": "itemType == dev.machina.step.model", "group": "danger" }
     ],
     "toolbarActions": [
       { "command": "machina.step.import", "location": "viewport" }

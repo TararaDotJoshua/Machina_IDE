@@ -27,6 +27,7 @@ export interface PluginContext {
     setState<T>(state: T): Promise<void>;
     getRoot(): Promise<string | null>;
     readAsset<T>(relativePath: string): Promise<T>;
+    deleteAsset(relativePath: string): Promise<void>;
   };
   files: {
     open(options: { title?: string; extensions: string[] }): Promise<string | null>;

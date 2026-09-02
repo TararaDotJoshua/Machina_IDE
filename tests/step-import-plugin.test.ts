@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { PluginContext } from '@mechatronics-ide/plugin-sdk';
-import { breakIntoBodies } from '../plugins/step-import/src/main';
+import { breakIntoBodies, deleteStepImport } from '../plugins/step-import/src/main';
 
 describe('STEP plugin commands', () => {
   it('separates an imported scene into editable body records', async () => {
@@ -20,5 +20,22 @@ describe('STEP plugin commands', () => {
       expect.objectContaining({ name: 'Base', meshIndex: 0, triangleCount: 1, visible: true }),
       expect.objectContaining({ name: 'Arm', meshIndex: 1, triangleCount: 2, visible: true }),
     ] })] });
+  });
+
+  it('deletes an imported model and its cached scene', async () => {
+    const state = { models: [
+      { id: 'model-1', type: 'dev.machina.step.model', name: 'Robot', assetPath: 'assets/robot.scene.json' },
+      { id: 'model-2', type: 'dev.machina.step.model', name: 'Fixture', assetPath: 'assets/fixture.scene.json' },
+    ] };
+    const setState = vi.fn(async () => undefined);
+    const deleteAsset = vi.fn(async () => undefined);
+    const context = {
+      project: { getState: vi.fn(async () => state), setState, deleteAsset },
+      logger: { info: vi.fn(), warn: vi.fn() },
+    } as unknown as PluginContext;
+
+    await expect(deleteStepImport(context, { target: 'model-1' })).resolves.toBe('Deleted Robot');
+    expect(setState).toHaveBeenCalledWith({ models: [state.models[1]] });
+    expect(deleteAsset).toHaveBeenCalledWith('assets/robot.scene.json');
   });
 });

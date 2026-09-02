@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ProjectService } from '../src/main/project-service';
@@ -33,6 +33,9 @@ describe('project persistence', () => {
     await writeFile(join(projectRoot, 'assets', 'scene.json'), '{"version":1}', 'utf8');
     expect(await reopened.readAsset('assets/scene.json')).toEqual({ version: 1 });
     await expect(reopened.readAsset('project.json')).rejects.toThrow('assets directory');
+    await reopened.deleteAsset('assets/scene.json');
+    await expect(access(join(projectRoot, 'assets', 'scene.json'))).rejects.toThrow();
+    await expect(reopened.deleteAsset('project.json')).rejects.toThrow('assets directory');
   });
 
   it('organizes folders and edits plugin-owned tree records transactionally', async () => {
@@ -51,5 +54,7 @@ describe('project persistence', () => {
 
     expect(updated.treePlacements['model-1']).toEqual({ parentId: folder.id, order: 0 });
     expect(updated.pluginState['dev.machina.step-import']).toMatchObject({ models: [{ name: 'Robot Assembly', bodies: [{ name: 'Arm Body', visible: false }] }] });
+    await service.setPluginState('dev.machina.step-import', { models: [] });
+    expect(service.current?.treePlacements['model-1']).toBeUndefined();
   });
 });

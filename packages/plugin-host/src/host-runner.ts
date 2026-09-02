@@ -84,6 +84,10 @@ function makeContext(): PluginContext {
         requirePermission('project.read');
         return call('project.readAsset', { relativePath }) as Promise<T>;
       },
+      deleteAsset: async (relativePath: string) => {
+        requirePermission('project.write');
+        await call('project.deleteAsset', { relativePath });
+      },
     },
     files: {
       open: async (options) => {

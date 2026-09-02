@@ -86,10 +86,29 @@ export async function breakIntoBodies(context: PluginContext, args?: unknown): P
   return `Created ${bodies.length} bodies`;
 }
 
+export async function deleteStepImport(context: PluginContext, args?: unknown): Promise<string> {
+  const target = args && typeof args === 'object' && typeof (args as { target?: unknown }).target === 'string'
+    ? (args as { target: string }).target
+    : '';
+  if (!target) throw new Error('Select an imported STEP model first');
+  const state = normalizeState(await context.project.getState<StepPluginState>());
+  const model = state.models.find((item) => item.id === target);
+  if (!model) throw new Error('The selected item is not an imported STEP model');
+  await context.project.setState({ models: state.models.filter((item) => item.id !== target) });
+  try {
+    await context.project.deleteAsset(model.assetPath);
+  } catch (error) {
+    context.logger.warn(`Removed ${model.name}, but its cached scene could not be deleted: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  context.logger.info(`Deleted STEP import ${model.name}`);
+  return `Deleted ${model.name}`;
+}
+
 export default definePlugin({
   async activate(context) {
     context.commands.registerCommand('machina.step.import', () => importStep(context));
     context.commands.registerCommand('machina.step.breakIntoBodies', (args) => breakIntoBodies(context, args));
+    context.commands.registerCommand('machina.step.deleteImport', (args) => deleteStepImport(context, args));
     context.ai.registerTool('machina.step.listModels', async () => {
       const state = normalizeState(await context.project.getState<StepPluginState>());
       return {
