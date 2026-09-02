@@ -1,8 +1,10 @@
 {
   "name": "@mechatronics-ide/plugin-sdk",
-  "version": "0.2.0-beta.2",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "exports": "./src/index.ts",
-  "dependencies": { "@mechatronics-ide/core": "0.2.0-beta.2" }
+  "dependencies": {
+    "@mechatronics-ide/core": "1.0.0"
+  }
 }

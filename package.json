@@ -1,9 +1,9 @@
 {
   "name": "machina-ide",
-  "version": "0.2.0-beta.2",
+  "version": "1.0.0",
   "private": true,
   "author": "Machina IDE Contributors",
-  "description": "Machina IDE prerelease engineering workspace",
+  "description": "Desktop-first engineering workspace for mechatronics projects",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/TararaDotJoshua/Machina_IDE.git"
@@ -22,7 +22,7 @@
     "build": "npm run typecheck && npm run test && npm run build:plugins && electron-vite build",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "release:beta": "npm run build && electron-builder --win nsis --publish always",
+    "release": "npm run build && electron-builder --win nsis --publish always",
     "build:plugins": "node scripts/build-plugins.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run build:plugins && vitest run",
@@ -49,7 +49,7 @@
     "@types/semver": "^7.7.0",
     "@types/three": "^0.179.0",
     "@vitejs/plugin-react": "^5.0.2",
-    "electron": "^37.3.1",
+    "electron": "^44.1.1",
     "electron-builder": "^26.0.12",
     "electron-vite": "^4.0.0",
     "esbuild": "^0.25.9",
@@ -83,8 +83,8 @@
       "provider": "github",
       "owner": "TararaDotJoshua",
       "repo": "Machina_IDE",
-      "channel": "beta",
-      "releaseType": "prerelease"
+      "channel": "latest",
+      "releaseType": "release"
     },
     "win": {
       "target": "nsis",

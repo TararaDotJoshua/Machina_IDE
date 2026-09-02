@@ -9,7 +9,6 @@ import {
   ChevronRight,
   CircleAlert,
   CircuitBoard,
-  Code2,
   Command,
   Folder,
   Download,
@@ -43,7 +42,7 @@ type CommandItem = CommandContribution & { pluginId?: string; handler?: () => un
 type WorkspacePresetId = 'system' | 'mechanical' | 'electrical' | 'software';
 type TileMode = 'floating' | 'grid' | 'rows' | 'columns' | 'cascade';
 type DockZone = 'left' | 'right' | 'top' | 'bottom' | 'center';
-type WorkspaceWindowId = 'project' | 'viewer' | 'electrical' | 'software' | 'console' | 'inspector' | 'extensions';
+type WorkspaceWindowId = 'project' | 'viewer' | 'console' | 'inspector' | 'extensions';
 interface WindowRect { x: number; y: number; width: number; height: number; z: number }
 interface DockCandidate { target: WorkspaceWindowId; zone: DockZone }
 interface WorkspacePreset { id: WorkspacePresetId; title: string; storeWorkspace: string; windows: Partial<Record<WorkspaceWindowId, Omit<WindowRect, 'z'>>> }
@@ -56,14 +55,14 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
     project: { x: 0, y: 0, width: 20, height: 70 }, viewer: { x: 20.4, y: 0, width: 55.2, height: 70 }, inspector: { x: 76, y: 0, width: 24, height: 70 }, console: { x: 0, y: 70.4, width: 100, height: 29.6 },
   } },
   { id: 'electrical', title: 'Electrical', storeWorkspace: 'electronics', windows: {
-    project: { x: 0, y: 0, width: 19, height: 100 }, electrical: { x: 19.4, y: 0, width: 57, height: 68 }, inspector: { x: 76.8, y: 0, width: 23.2, height: 68 }, console: { x: 19.4, y: 68.4, width: 80.6, height: 31.6 },
+    project: { x: 0, y: 0, width: 24, height: 100 }, viewer: { x: 24.4, y: 0, width: 51.6, height: 68 }, inspector: { x: 76.4, y: 0, width: 23.6, height: 68 }, console: { x: 24.4, y: 68.4, width: 75.6, height: 31.6 },
   } },
   { id: 'software', title: 'Software', storeWorkspace: 'software', windows: {
-    project: { x: 0, y: 0, width: 19, height: 100 }, software: { x: 19.4, y: 0, width: 57, height: 70 }, inspector: { x: 76.8, y: 0, width: 23.2, height: 70 }, console: { x: 19.4, y: 70.4, width: 80.6, height: 29.6 },
+    project: { x: 0, y: 0, width: 24, height: 100 }, viewer: { x: 24.4, y: 0, width: 51.6, height: 70 }, inspector: { x: 76.4, y: 0, width: 23.6, height: 70 }, console: { x: 24.4, y: 70.4, width: 75.6, height: 29.6 },
   } },
 ];
 
-const ALL_WINDOWS: WorkspaceWindowId[] = ['project', 'viewer', 'electrical', 'software', 'console', 'inspector', 'extensions'];
+const ALL_WINDOWS: WorkspaceWindowId[] = ['project', 'viewer', 'console', 'inspector', 'extensions'];
 
 export function App(): React.JSX.Element {
   const { snapshot, setSnapshot, paletteOpen, setPaletteOpen, notification, notify, updateState, setUpdateState } = useIdeStore();
@@ -267,8 +266,6 @@ function WorkspaceWindow({ id, rect, active, maximized, dockZone, children, onAc
 function WorkspaceWindowContent({ id, commands }: { id: WorkspaceWindowId; commands: CommandItem[] }): React.JSX.Element {
   if (id === 'project') return <Explorer />;
   if (id === 'viewer') return <WorkArea commands={commands} />;
-  if (id === 'electrical') return <ElectronicsWorkspace />;
-  if (id === 'software') return <SoftwareWorkspace />;
   if (id === 'console') return <BottomPanel />;
   if (id === 'inspector') return <Inspector />;
   return <ExtensionDetails />;
@@ -385,7 +382,7 @@ function Extensions(): React.JSX.Element {
     <div className="pane-content extensions-list">
       <PaneHeader title="EXTENSIONS" action={<button title="Reload" onClick={() => void window.machina.plugins.reload()}><RefreshCw size={14} /></button>} />
       <div className="explorer-search"><Search size={13} /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search installed" /></div>
-      {plugins.length === 0 && <div className="empty-state"><Package size={28} /><strong>No extensions installed</strong><span>Open the user extensions folder from the Developer menu.</span></div>}
+      {plugins.length === 0 && <div className="empty-state"><Package size={28} /><strong>No extensions installed</strong><span>Open the extensions folder from the Extensions menu.</span></div>}
       {plugins.length > 0 && filtered.length === 0 && <div className="empty-state"><Search size={28} /><strong>No matching extensions</strong><span>Try a different search.</span></div>}
       {filtered.map((plugin) => <div className={`extension-card ${plugin.status}`} key={`${plugin.source}-${plugin.id}`}><div className="extension-icon"><Package size={19} /></div><div className="extension-copy"><strong>{plugin.name}</strong><span>{plugin.manifest?.version ?? 'Invalid manifest'} · {plugin.source}</span><small>{plugin.status}</small>{plugin.diagnostics.map((item, index) => <em key={index}>{item.message}</em>)}</div><label className="switch"><input type="checkbox" checked={plugin.enabled} disabled={plugin.status === 'invalid'} onChange={(event) => void window.machina.plugins.setEnabled(plugin.id, event.target.checked)} /><span /></label></div>)}
     </div>
@@ -401,14 +398,11 @@ function WorkArea({ commands }: { commands: CommandItem[] }): React.JSX.Element 
   const [frameToken, setFrameToken] = useState(0);
   if (workspace === 'extensions') return <ExtensionDetails />;
   const toolbar = contributions.flatMap((item) => item.contributes.toolbarActions).map((action) => commands.find((command) => command.id === action.command)).filter(Boolean) as CommandItem[];
-  if (workspace === 'electronics') return <ElectronicsWorkspace />;
-  if (workspace === 'software') return <SoftwareWorkspace />;
   return (
     <section className="work-area">
-      <EditorTabs icon={<Box size={13} />} title={workspace === 'design' ? 'Mechanical Assembly' : 'System Model'} />
+      <EditorTabs icon={<Box size={13} />} title="3D Viewport" />
       <div className="viewport-toolbar"><div><button className="active" title="Selection mode"><MousePointer2 size={15} /></button><button title="Frame model" onClick={() => setFrameToken((value) => value + 1)}><Maximize2 size={15} /></button></div><div className="toolbar-center"><button className={renderMode === 'shaded' ? 'active' : ''} onClick={() => setRenderMode('shaded')}>Shaded</button><button className={renderMode === 'wireframe' ? 'active' : ''} onClick={() => setRenderMode('wireframe')}>Wireframe</button>{toolbar.map((command) => <button key={command.id} className="plugin-toolbar" onClick={() => void window.machina.commands.execute(command.id, { target: selectedId }).then((result) => notify(String(result)))}><Sparkles size={13} />{command.title}</button>)}</div></div>
       <Viewport key={frameToken} renderMode={renderMode} />
-      <div className="workspace-context"><strong>{workspace === 'design' ? 'Mechanical design' : 'System overview'}</strong><span>Select a component to connect the tree, viewport, inspector, and engineering panels.</span></div>
     </section>
   );
 }
@@ -417,44 +411,9 @@ function EditorTabs({ icon, title }: { icon: React.ReactNode; title: string }): 
   return <div className="editor-tabs"><div className="editor-tab-label">{icon}<span>{title}</span></div></div>;
 }
 
-function ElectronicsWorkspace(): React.JSX.Element {
-  const select = useIdeStore((state) => state.select);
-  const project = useIdeStore((state) => state.snapshot?.project);
-  const root = project?.treeItems.find((item) => item.type.includes('electronics'));
-  if (!root) return <section className="work-area domain-workspace"><EditorTabs icon={<CircuitBoard size={13} />} title="Electrical Systems" /><div className="domain-empty"><CircuitBoard size={34} /><strong>No electrical system configured</strong><span>This project does not contain any electrical items.</span></div></section>;
-  return (
-    <section className="work-area domain-workspace">
-      <EditorTabs icon={<CircuitBoard size={13} />} title={root.name} />
-      <div className="domain-toolbar"><div><strong>{root.name}</strong><span>{formatPropertyValue(root.properties.voltage ?? 'Voltage not set')} · {formatPropertyValue(root.properties.bus ?? 'Bus not set')}</span></div></div>
-      <div className="schematic-canvas">
-        <div className="schematic-summary"><span><CircuitBoard size={14} /> {root.children.length} devices</span><span><Zap size={14} /> {formatPropertyValue(root.properties.voltage ?? '—')}</span><span><Radio size={14} /> {formatPropertyValue(root.properties.bus ?? '—')}</span></div>
-        {root.children.map((item, index) => <button key={item.id} className="schematic-node" style={{ left: `${10 + (index % 3) * 31}%`, top: `${36 + Math.floor(index / 3) * 28}%` }} onClick={() => select(item.id)}>{projectItemIcon(item.type, 21)}<strong>{item.name}</strong><span>{summarizeProperties(item.properties)}</span><em>{item.type.replace('core.', '').toUpperCase()}</em></button>)}
-        {root.children.length === 0 && <div className="domain-empty"><CircuitBoard size={30} /><strong>No electrical devices</strong><span>Add electrical items to the project document to populate this view.</span></div>}
-      </div>
-    </section>
-  );
-}
-
-function SoftwareWorkspace(): React.JSX.Element {
-  const select = useIdeStore((state) => state.select);
-  const project = useIdeStore((state) => state.snapshot?.project);
-  const root = project?.treeItems.find((item) => item.type.includes('software'));
-  if (!root) return <section className="work-area domain-workspace"><EditorTabs icon={<Code2 size={13} />} title="Firmware" /><div className="domain-empty"><Code2 size={34} /><strong>No firmware target configured</strong><span>This project does not contain firmware metadata or source modules.</span></div></section>;
-  return (
-    <section className="work-area domain-workspace">
-      <EditorTabs icon={<Code2 size={13} />} title={root.name} />
-      <div className="domain-toolbar"><div><strong>{root.name}</strong><span>{formatPropertyValue(root.properties.target ?? 'Target not set')} · {formatPropertyValue(root.properties.configuration ?? 'Configuration not set')}</span></div></div>
-      <div className="software-canvas">
-        <aside className="software-outline"><small>MODULES</small><button onClick={() => select(root.id)}><Braces size={13} /> {root.name}</button>{root.children.map((item) => <button key={item.id} onClick={() => select(item.id)}><Code2 size={13} /> {item.name}</button>)}</aside>
-        <div className="firmware-details"><Code2 size={32} /><strong>{root.children.length ? `${root.children.length} source module${root.children.length === 1 ? '' : 's'}` : 'No source modules registered'}</strong><span>Machina displays project firmware metadata here. Building requires a configured toolchain integration.</span><div className="metadata-grid">{Object.entries(root.properties).map(([key, value]) => <div key={key}><small>{titleCase(key)}</small><b>{formatPropertyValue(value)}</b></div>)}</div></div>
-      </div>
-    </section>
-  );
-}
-
 function ExtensionDetails(): React.JSX.Element {
   const plugins = useIdeStore((state) => state.snapshot?.plugins ?? []);
-  return <section className="work-area extension-details"><div className="hero"><Package size={44} /><div><p>EXTENSION HOST</p><h1>Installed extensions</h1><span>User extensions are validated and isolated from the renderer.</span></div></div>{plugins.length === 0 ? <div className="domain-empty"><Package size={34} /><strong>No extensions installed</strong><span>Use Developer → Open User Plugins Folder to add an extension, then reload extensions.</span></div> : <div className="extension-grid">{plugins.map((plugin) => <article key={`${plugin.source}-${plugin.id}`}><div><Package size={21} /><strong>{plugin.name}</strong><span className={`status-pill ${plugin.status}`}>{plugin.status}</span></div><p>{plugin.id}</p><small>Permissions</small><div className="chips">{plugin.manifest?.permissions.map((permission) => <span key={permission}>{permission}</span>) ?? <span>Manifest rejected</span>}</div><small>Activation events</small><div className="mono-list">{plugin.manifest?.activationEvents.join('\n') ?? plugin.diagnostics.map((item) => item.message).join('\n')}</div></article>)}</div>}</section>;
+  return <section className="work-area extension-details"><div className="hero"><Package size={44} /><div><p>EXTENSION HOST</p><h1>Installed extensions</h1><span>User extensions are validated and isolated from the renderer.</span></div></div>{plugins.length === 0 ? <div className="domain-empty"><Package size={34} /><strong>No extensions installed</strong><span>Use Extensions → Open Extensions Folder to add an extension, then reload extensions.</span></div> : <div className="extension-grid">{plugins.map((plugin) => <article key={`${plugin.source}-${plugin.id}`}><div><Package size={21} /><strong>{plugin.name}</strong><span className={`status-pill ${plugin.status}`}>{plugin.status}</span></div><p>{plugin.id}</p><small>Permissions</small><div className="chips">{plugin.manifest?.permissions.map((permission) => <span key={permission}>{permission}</span>) ?? <span>Manifest rejected</span>}</div><small>Activation events</small><div className="mono-list">{plugin.manifest?.activationEvents.join('\n') ?? plugin.diagnostics.map((item) => item.message).join('\n')}</div></article>)}</div>}</section>;
 }
 
 function Inspector(): React.JSX.Element {
@@ -464,13 +423,13 @@ function Inspector(): React.JSX.Element {
   const item = findProjectItem(snapshot.project?.treeItems ?? [], selectedId) ?? virtual.find((entry) => entry.id === selectedId);
   const sections = snapshot.contributions.flatMap((entry) => entry.contributes.inspectorSections.map((section) => ({ ...section, pluginId: entry.pluginId }))).filter((section) => item && section.itemTypes.includes(item.type)).sort((a, b) => b.priority - a.priority);
   if (!item) return <div className="pane-content"><PaneHeader title="INSPECTOR" /><div className="empty-state"><MousePointer2 size={28} /><span>Select a project item</span></div></div>;
-  const engineeringStatus = String(item.properties.status ?? (item.type.includes('result') ? 'complete' : 'ready'));
+  const engineeringStatus = typeof item.properties.status === 'string' ? item.properties.status : null;
   const coreProperties = Object.fromEntries(Object.entries(item.properties).filter(([key]) => !['id', 'name', 'status'].includes(key)).map(([key, value]) => [titleCase(key), key === 'completedAt' ? formatDateTime(String(value)) : formatPropertyValue(value)]));
   return (
     <div className="pane-content inspector">
       <PaneHeader title="INSPECTOR" />
-      <div className="selection-heading"><div className="selection-icon">{projectItemIcon(item.type, 20)}</div><div><strong>{item.name}</strong><span>{item.type}</span><div className={`selection-status ${engineeringStatus}`}><span />{engineeringStatus}</div></div></div>
-      <PropertySection title="Engineering status" properties={{ State: engineeringStatus, Owner: item.type.startsWith('core.') ? 'Machina Core' : 'Plugin contribution', Configuration: snapshot.project?.activeConfiguration ?? 'Default' }} />
+      <div className="selection-heading"><div className="selection-icon">{projectItemIcon(item.type, 20)}</div><div><strong>{item.name}</strong><span>{item.type}</span>{engineeringStatus && <div className={`selection-status ${engineeringStatus}`}><span />{engineeringStatus}</div>}</div></div>
+      <PropertySection title="Item" properties={{ Type: item.type, Configuration: snapshot.project?.activeConfiguration ?? 'Default', ...(engineeringStatus ? { Status: engineeringStatus } : {}) }} />
       {Object.keys(coreProperties).length > 0 && <PropertySection title={inspectorSectionTitle(item.type)} properties={coreProperties} />}
       {sections.map((section) => <PropertySection key={`${section.pluginId}-${section.id}`} title={section.title} plugin={section.pluginId} properties={Object.fromEntries(section.properties.map((property) => [property.label, resolveInspectorValue(snapshot, item, section.pluginId, property.key)]))} />)}
     </div>
@@ -542,11 +501,6 @@ function PaneHeader({ title, action }: { title: string; action?: React.ReactNode
 function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }
 function titleCase(value: string): string { return value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()); }
 function flattenProjectItems(items: ProjectItem[]): ProjectItem[] { return items.flatMap((item) => [item, ...flattenProjectItems(item.children)]); }
-function summarizeProperties(properties: Record<string, unknown>): string {
-  const entries = Object.entries(properties).filter(([key]) => key !== 'status').slice(0, 2);
-  return entries.length ? entries.map(([key, value]) => `${titleCase(key)}: ${formatPropertyValue(value)}`).join(' · ') : 'No properties';
-}
-
 function createPresetRects(id: WorkspacePresetId): Partial<Record<WorkspaceWindowId, WindowRect>> {
   const preset = WORKSPACE_PRESETS.find((item) => item.id === id) ?? WORKSPACE_PRESETS[0]!;
   return Object.fromEntries(ALL_WINDOWS.map((windowId, index) => {
@@ -635,8 +589,6 @@ function workspaceWindowMeta(id: WorkspaceWindowId): { title: string; icon: Reac
   const meta: Record<WorkspaceWindowId, { title: string; icon: React.ReactNode; plugin?: boolean }> = {
     project: { title: 'Project', icon: <PanelLeft size={13} /> },
     viewer: { title: 'System Model', icon: <LayoutGrid size={13} /> },
-    electrical: { title: 'Electrical Systems', icon: <CircuitBoard size={13} /> },
-    software: { title: 'Firmware Editor', icon: <Code2 size={13} /> },
     console: { title: 'Console', icon: <PanelBottom size={13} /> },
     inspector: { title: 'Inspector', icon: <PanelRight size={13} /> },
     extensions: { title: 'Extension Host', icon: <Package size={13} /> },

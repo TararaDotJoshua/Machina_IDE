@@ -26,15 +26,7 @@ export class ProjectService extends EventEmitter {
       name,
       activeConfiguration: 'Default',
       updatedAt: now,
-      treeItems: [
-        {
-          id: 'assembly-root',
-          type: 'core.assembly',
-          name: 'Main Assembly',
-          properties: { status: 'draft', visible: true },
-          children: [],
-        },
-      ],
+      treeItems: [],
       pluginState: {},
     };
     this.projectRoot = root;

@@ -29,7 +29,7 @@ await build({
 });
 
 let pluginEntries = [];
-try { pluginEntries = await readdir(pluginsRoot, { withFileTypes: true }); } catch { /* no bundled plugins in prerelease */ }
+try { pluginEntries = await readdir(pluginsRoot, { withFileTypes: true }); } catch { /* no bundled extensions */ }
 for (const entry of pluginEntries) {
   if (!entry.isDirectory()) continue;
   const pluginRoot = join(pluginsRoot, entry.name);

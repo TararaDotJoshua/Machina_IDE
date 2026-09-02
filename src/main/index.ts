@@ -128,8 +128,6 @@ function buildMenu(): void {
           submenu: [
             { label: 'Project', click: () => mainWindow?.webContents.send('machina:menu', 'window:project') },
             { label: 'System Model', click: () => mainWindow?.webContents.send('machina:menu', 'window:viewer') },
-            { label: 'Electrical Systems', click: () => mainWindow?.webContents.send('machina:menu', 'window:electrical') },
-            { label: 'Firmware Editor', click: () => mainWindow?.webContents.send('machina:menu', 'window:software') },
             { label: 'Console', click: () => mainWindow?.webContents.send('machina:menu', 'window:console') },
             { label: 'Inspector', click: () => mainWindow?.webContents.send('machina:menu', 'window:inspector') },
             { label: 'Extension Host', click: () => mainWindow?.webContents.send('machina:menu', 'window:extensions') },
@@ -146,16 +144,18 @@ function buildMenu(): void {
             { label: 'Freeform', click: () => mainWindow?.webContents.send('machina:menu', 'tiling:floating') },
           ],
         },
-        { type: 'separator' },
-        { role: 'reload' },
-        { role: 'toggleDevTools' },
+        ...(!app.isPackaged ? [
+          { type: 'separator' as const },
+          { role: 'reload' as const },
+          { role: 'toggleDevTools' as const },
+        ] : []),
       ],
     },
     {
-      label: 'Developer',
+      label: 'Extensions',
       submenu: [
-        { label: 'Reload Plugins', click: () => void plugins.discover() },
-        { label: 'Open User Plugins Folder', click: () => void shell.openPath(join(app.getPath('userData'), 'plugins')) },
+        { label: 'Reload Extensions', click: () => void plugins.discover() },
+        { label: 'Open Extensions Folder', click: () => void shell.openPath(join(app.getPath('userData'), 'plugins')) },
       ],
     },
     {

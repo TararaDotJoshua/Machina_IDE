@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const API_VERSION = 1 as const;
-export const APP_VERSION = '0.2.0-beta.2';
+export const APP_VERSION = '1.0.0';
 
 export const permissionSchema = z.enum([
   'project.read',

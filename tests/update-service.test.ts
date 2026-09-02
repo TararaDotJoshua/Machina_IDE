@@ -11,16 +11,17 @@ class FakeUpdater extends EventEmitter implements UpdateBackend {
   quitAndInstall = vi.fn();
 }
 
-function createService(packaged = true): { backend: FakeUpdater; service: UpdateService; beforeInstall: ReturnType<typeof vi.fn> } {
+function createService(packaged = true): { backend: FakeUpdater; service: UpdateService; beforeInstall: ReturnType<typeof vi.fn>; log: ReturnType<typeof vi.fn> } {
   const backend = new FakeUpdater();
   const beforeInstall = vi.fn(async () => undefined);
+  const log = vi.fn();
   const service = new UpdateService(backend, {
     packaged,
-    currentVersion: '0.2.0-beta.2',
-    log: vi.fn(),
+    currentVersion: '1.0.0',
+    log,
     beforeInstall,
   });
-  return { backend, service, beforeInstall };
+  return { backend, service, beforeInstall, log };
 }
 
 describe('UpdateService', () => {
@@ -31,23 +32,36 @@ describe('UpdateService', () => {
     expect(backend.checkForUpdates).not.toHaveBeenCalled();
   });
 
-  it('configures the beta channel and publishes download progress', () => {
+  it('configures the stable channel and publishes download progress', () => {
     const { backend, service } = createService();
     service.initialize();
-    backend.emit('update-available', { version: '0.2.0-beta.3' });
+    backend.emit('update-available', { version: '1.0.1' });
     backend.emit('download-progress', { percent: 42.4, transferred: 424, total: 1000 });
     expect(backend.autoDownload).toBe(true);
-    expect(backend.allowPrerelease).toBe(true);
-    expect(backend.channel).toBe('beta');
+    expect(backend.allowPrerelease).toBe(false);
+    expect(backend.channel).toBe('latest');
     expect(service.getState()).toMatchObject({ status: 'downloading', percent: 42.4, transferred: 424, total: 1000 });
   });
 
   it('saves state before restarting into a downloaded update', async () => {
     const { backend, service, beforeInstall } = createService();
     service.initialize();
-    backend.emit('update-downloaded', { version: '0.2.0-beta.3' });
+    backend.emit('update-downloaded', { version: '1.0.1' });
     await service.install();
     expect(beforeInstall).toHaveBeenCalledOnce();
     expect(backend.quitAndInstall).toHaveBeenCalledWith(false, true);
+  });
+
+  it('logs a failed check once when the backend also emits the error', async () => {
+    const { backend, service, log } = createService();
+    const error = new Error('Update service unavailable');
+    backend.checkForUpdates.mockImplementationOnce(async () => {
+      backend.emit('error', error);
+      throw error;
+    });
+    service.initialize();
+    const state = await service.check();
+    expect(state).toMatchObject({ status: 'error', message: error.message });
+    expect(log).toHaveBeenCalledOnce();
   });
 });

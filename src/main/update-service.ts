@@ -31,6 +31,7 @@ interface UpdateServiceOptions {
 export class UpdateService extends EventEmitter {
   private state: UpdateState;
   private initialized = false;
+  private checkPromise: Promise<UpdateState> | null = null;
 
   constructor(private readonly backend: UpdateBackend, private readonly options: UpdateServiceOptions) {
     super();
@@ -46,8 +47,8 @@ export class UpdateService extends EventEmitter {
     this.initialized = true;
     this.backend.autoDownload = true;
     this.backend.autoInstallOnAppQuit = true;
-    this.backend.allowPrerelease = true;
-    this.backend.channel = 'beta';
+    this.backend.allowPrerelease = false;
+    this.backend.channel = 'latest';
     this.backend.on('checking-for-update', () => this.setState({ status: 'checking', message: 'Checking for updates' }));
     this.backend.on('update-available', (value) => {
       const info = value as UpdateInfo;
@@ -85,14 +86,26 @@ export class UpdateService extends EventEmitter {
 
   async check(): Promise<UpdateState> {
     if (!this.options.packaged) return this.getState();
-    if (this.state.status === 'checking' || this.state.status === 'downloading') return this.getState();
+    if (this.checkPromise) return this.checkPromise;
+    if (this.state.status === 'downloading') return this.getState();
+    this.checkPromise = this.runCheck();
+    try {
+      return await this.checkPromise;
+    } finally {
+      this.checkPromise = null;
+    }
+  }
+
+  private async runCheck(): Promise<UpdateState> {
     this.setState({ status: 'checking', message: 'Checking for updates' });
     try {
       await this.backend.checkForUpdates();
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      this.setState({ status: 'error', message, checkedAt: new Date().toISOString() });
-      this.options.log('error', `Update check failed: ${message}`);
+      if (this.state.status !== 'error' || this.state.message !== message) {
+        this.setState({ status: 'error', message, checkedAt: new Date().toISOString() });
+        this.options.log('error', `Update check failed: ${message}`);
+      }
     }
     return this.getState();
   }

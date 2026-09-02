@@ -16,7 +16,8 @@ describe('project persistence', () => {
     temporaryRoots.push(root);
     const projectRoot = join(root, 'Round Trip.mechatronics');
     const service = new ProjectService();
-    await service.createAt(projectRoot, 'Round Trip');
+    const created = await service.createAt(projectRoot, 'Round Trip');
+    expect(created.treeItems).toEqual([]);
     const opaqueState = {
       nested: { futureSchema: 9, values: [1, 'two', { untouched: true }] },
       binaryReference: 'assets/plugin-blob.bin',
