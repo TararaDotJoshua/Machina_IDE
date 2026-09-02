@@ -1,5 +1,5 @@
 import { build } from 'esbuild';
-import { mkdir, readdir, readFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 
 const root = resolve(import.meta.dirname, '..');
@@ -72,6 +72,12 @@ for (const entry of pluginEntries) {
         target: 'es2022',
       });
     }
+  }
+  for (const resource of manifest.resources ?? []) {
+    const source = join(pluginRoot, resource.source);
+    const target = join(pluginRoot, resource.target);
+    await mkdir(dirname(target), { recursive: true });
+    await copyFile(source, target);
   }
 }
 

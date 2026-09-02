@@ -1,0 +1,109 @@
+{
+  "id": "dev.machina.step-import",
+  "name": "STEP Import",
+  "version": "1.0.0-beta.5",
+  "engines": {
+    "mechatronicsIDE": ">=1.0.0-beta.2 <2.0.0"
+  },
+  "main": "dist/main.cjs",
+  "activationEvents": [
+    "onCommand:machina.step.import",
+    "onCommand:machina.step.breakIntoBodies",
+    "onProjectItem:dev.machina.step.model"
+  ],
+  "resources": [
+    {
+      "source": "vendor/occt-import-js.wasm",
+      "target": "dist/occt-import-js.wasm"
+    }
+  ],
+  "permissions": [
+    "project.read",
+    "project.write",
+    "file.open",
+    "ui.panels",
+    "process.worker",
+    "ai.tools"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "id": "machina.step.import",
+        "title": "Import STEP Model…",
+        "category": "STEP Import",
+        "keybinding": "Ctrl+Alt+I"
+      },
+      {
+        "id": "machina.step.breakIntoBodies",
+        "title": "Separate STEP Model into Bodies",
+        "category": "STEP Import"
+      }
+    ],
+    "projectItemTypes": [
+      {
+        "type": "dev.machina.step.model",
+        "label": "STEP Model",
+        "contextValue": "stepModel",
+        "stateKey": "models"
+      }
+    ],
+    "inspectorSections": [
+      {
+        "id": "step-model-details",
+        "title": "STEP Model",
+        "itemTypes": ["dev.machina.step.model"],
+        "priority": 100,
+        "properties": [
+          { "key": "fileName", "label": "Source file", "type": "readonly" },
+          { "key": "meshCount", "label": "Meshes", "type": "readonly" },
+          { "key": "triangleCount", "label": "Triangles", "type": "readonly" },
+          { "key": "linearUnit", "label": "Output unit", "type": "readonly" },
+          { "key": "importedAt", "label": "Imported", "type": "readonly" }
+        ]
+      },
+      {
+        "id": "step-body-details",
+        "title": "STEP Body",
+        "itemTypes": ["dev.machina.step.body"],
+        "priority": 100,
+        "properties": [
+          { "key": "meshIndex", "label": "Mesh index", "type": "readonly" },
+          { "key": "triangleCount", "label": "Triangles", "type": "readonly" },
+          { "key": "visible", "label": "Visible", "type": "boolean" }
+        ]
+      }
+    ],
+    "explorerContextMenus": [
+      { "command": "machina.step.breakIntoBodies", "when": "itemType == dev.machina.step.model", "group": "geometry" }
+    ],
+    "toolbarActions": [
+      { "command": "machina.step.import", "location": "viewport" }
+    ],
+    "windows": [
+      {
+        "id": "model-viewer",
+        "title": "STEP Model",
+        "kind": "viewportScene",
+        "stateKey": "models",
+        "defaultWorkspaces": ["system", "mechanical"]
+      }
+    ],
+    "aiTools": [
+      {
+        "name": "machina.step.listModels",
+        "description": "List STEP models imported into the active Machina project.",
+        "inputSchema": { "type": "object", "properties": {} },
+        "outputSchema": { "type": "object", "properties": { "models": { "type": "array" } }, "required": ["models"] },
+        "sideEffects": []
+      }
+    ],
+    "workers": [
+      {
+        "id": "step-import",
+        "entry": "dist/step-import.cjs",
+        "timeoutMs": 300000,
+        "resultItemType": "dev.machina.step.model"
+      }
+    ]
+  }
+}

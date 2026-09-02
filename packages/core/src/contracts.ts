@@ -1,11 +1,12 @@
 import { z } from 'zod';
 
 export const API_VERSION = 1 as const;
-export const APP_VERSION = '1.0.0-beta.1';
+export const APP_VERSION = '1.0.0-beta.5';
 
 export const permissionSchema = z.enum([
   'project.read',
   'project.write',
+  'file.open',
   'ui.panels',
   'process.worker',
   'ai.tools',
@@ -63,6 +64,14 @@ const panelSchema = z.object({
   kind: z.enum(['measurements', 'simulation', 'json', 'text']),
 });
 
+const windowSchema = z.object({
+  id: z.string().min(1),
+  title: z.string().min(1),
+  kind: z.enum(['viewportScene', 'json']),
+  stateKey: z.string().min(1),
+  defaultWorkspaces: z.array(z.enum(['system', 'mechanical', 'electrical', 'software'])).default([]),
+});
+
 const toolbarSchema = z.object({ command: z.string(), location: z.literal('viewport') });
 
 const capabilitySchema = z.object({
@@ -100,6 +109,7 @@ export const pluginManifestSchema = z.object({
       'Invalid activation event',
     ),
   ),
+  resources: z.array(z.object({ source: z.string().min(1), target: z.string().min(1) })).default([]),
   permissions: z.array(permissionSchema).default([]),
   contributes: z
     .object({
@@ -109,6 +119,7 @@ export const pluginManifestSchema = z.object({
       projectItemTypes: z.array(treeTypeSchema).default([]),
       explorerContextMenus: z.array(menuSchema).default([]),
       bottomPanels: z.array(panelSchema).default([]),
+      windows: z.array(windowSchema).default([]),
       toolbarActions: z.array(toolbarSchema).default([]),
       capabilities: z.array(capabilitySchema).default([]),
       aiTools: z.array(aiToolSchema).default([]),
@@ -121,6 +132,7 @@ export const pluginManifestSchema = z.object({
       projectItemTypes: [],
       explorerContextMenus: [],
       bottomPanels: [],
+      windows: [],
       toolbarActions: [],
       capabilities: [],
       aiTools: [],
@@ -132,6 +144,19 @@ export type PluginManifest = z.infer<typeof pluginManifestSchema>;
 export type CommandContribution = z.infer<typeof commandContributionSchema>;
 export type InspectorContribution = z.infer<typeof inspectorContributionSchema>;
 export type AiToolContribution = z.infer<typeof aiToolSchema>;
+export type PluginWindowContribution = z.infer<typeof windowSchema>;
+
+export const sceneAssetSchema = z.object({
+  version: z.literal(1),
+  meshes: z.array(z.object({
+    name: z.string(),
+    color: z.tuple([z.number(), z.number(), z.number()]).optional(),
+    positions: z.array(z.number()),
+    normals: z.array(z.number()).optional(),
+    indices: z.array(z.number().int().nonnegative()),
+  })),
+});
+export type SceneAsset = z.infer<typeof sceneAssetSchema>;
 
 export const projectItemSchema: z.ZodType<ProjectItem> = z.lazy(() =>
   z.object({
@@ -157,6 +182,10 @@ export const projectDocumentSchema = z.object({
   name: z.string(),
   activeConfiguration: z.string(),
   treeItems: z.array(projectItemSchema),
+  treePlacements: z.record(z.string(), z.object({
+    parentId: z.string().nullable(),
+    order: z.number().int().nonnegative(),
+  })).default({}),
   pluginState: z.record(z.string(), z.unknown()),
   updatedAt: z.string(),
 });
@@ -176,6 +205,49 @@ export interface PluginDescriptor {
   enabled: boolean;
   status: PluginStatus;
   diagnostics: PluginDiagnostic[];
+}
+
+export const marketplacePluginSchema = z.object({
+  id: z.string().regex(/^[a-z0-9][a-z0-9.-]+$/),
+  name: z.string().min(1).max(100),
+  version: z.string().regex(/^\d+\.\d+\.\d+(?:-[\w.-]+)?$/),
+  description: z.string().min(1).max(500),
+  publisher: z.string().min(1).max(100),
+  license: z.string().min(1).max(100),
+  homepage: z.string().url().optional(),
+  repository: z.string().url().optional(),
+  categories: z.array(z.string().min(1).max(40)).max(10).default([]),
+  verified: z.boolean().default(false),
+  bundled: z.boolean().default(false),
+  engines: z.object({ mechatronicsIDE: z.string().min(1) }),
+  permissions: z.array(permissionSchema).default([]),
+  download: z.object({
+    url: z.string().url().refine((value) => value.startsWith('https://'), 'Plugin downloads must use HTTPS'),
+    sha256: z.string().regex(/^[a-f0-9]{64}$/),
+    sizeBytes: z.number().int().positive().max(100 * 1024 * 1024),
+  }).optional(),
+}).refine((entry) => entry.bundled || entry.download, 'Non-bundled plugins require a download');
+
+export const marketplaceCatalogSchema = z.object({
+  schemaVersion: z.literal(1),
+  updatedAt: z.string().datetime(),
+  plugins: z.array(marketplacePluginSchema).max(2_000),
+});
+
+export type MarketplacePlugin = z.infer<typeof marketplacePluginSchema>;
+export type MarketplaceCatalog = z.infer<typeof marketplaceCatalogSchema>;
+export interface PluginLibraryEntry extends MarketplacePlugin {
+  installedVersion?: string;
+  installedSource?: 'bundled' | 'user';
+  enabled?: boolean;
+  status?: PluginStatus;
+  updateAvailable: boolean;
+}
+export interface PluginLibraryState {
+  entries: PluginLibraryEntry[];
+  refreshedAt: string;
+  registryOnline: boolean;
+  message?: string;
 }
 
 export interface OutputEntry {
@@ -252,11 +324,18 @@ export interface MachinaBridge {
     open(): Promise<ProjectDocument | null>;
     save(): Promise<void>;
     updateItem(itemId: string, patch: Record<string, unknown>): Promise<ProjectDocument>;
+    createFolder(parentId?: string | null): Promise<ProjectDocument>;
+    moveItem(itemId: string, parentId: string | null, order: number): Promise<ProjectDocument>;
+    reorderItems(parentId: string | null, itemIds: string[]): Promise<ProjectDocument>;
+    readAsset(relativePath: string): Promise<unknown>;
   };
   plugins: {
     setEnabled(pluginId: string, enabled: boolean): Promise<void>;
     reload(): Promise<void>;
     activateEvent(event: string): Promise<void>;
+    getLibrary(refresh?: boolean): Promise<PluginLibraryState>;
+    install(pluginId: string): Promise<void>;
+    uninstall(pluginId: string): Promise<void>;
   };
   commands: { execute(commandId: string, args?: unknown): Promise<unknown> };
   workers: { cancel(instanceId: string): Promise<void> };

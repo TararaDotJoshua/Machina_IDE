@@ -8,6 +8,7 @@ import { ProjectService } from './project-service';
 import { SettingsStore } from './settings-store';
 import { WorkerManager } from './worker-manager';
 import { PluginManager } from './plugin-manager';
+import { PluginMarketplace } from './plugin-marketplace';
 import { UpdateService } from './update-service';
 
 let mainWindow: BrowserWindow | null = null;
@@ -15,6 +16,7 @@ const output: OutputEntry[] = [];
 const projects = new ProjectService();
 let settings: SettingsStore;
 let plugins: PluginManager;
+let marketplace: PluginMarketplace;
 let workers: WorkerManager;
 let updates: UpdateService;
 let updateInterval: NodeJS.Timeout | undefined;
@@ -69,6 +71,7 @@ async function createWindow(): Promise<void> {
   });
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
+  mainWindow.webContents.setZoomFactor(settings.interfaceScale);
 }
 
 async function chooseCreate(): Promise<Awaited<ReturnType<ProjectService['createAt']>> | null> {
@@ -113,6 +116,19 @@ function buildMenu(): void {
       label: 'View',
       submenu: [
         { label: 'Command Palette…', accelerator: 'CmdOrCtrl+Shift+P', click: () => mainWindow?.webContents.send('machina:menu', 'commandPalette') },
+        { label: 'Full Screen', accelerator: 'F11', role: 'togglefullscreen' },
+        {
+          label: 'Interface Scale',
+          submenu: [0.8, 0.9, 1, 1.1, 1.25, 1.5].map((factor) => ({
+            label: `${Math.round(factor * 100)}%`,
+            type: 'radio' as const,
+            checked: settings.interfaceScale === factor,
+            click: () => {
+              mainWindow?.webContents.setZoomFactor(factor);
+              void settings.setInterfaceScale(factor);
+            },
+          })),
+        },
         { type: 'separator' },
         {
           label: 'Workspaces',
@@ -130,7 +146,7 @@ function buildMenu(): void {
             { label: 'System Model', click: () => mainWindow?.webContents.send('machina:menu', 'window:viewer') },
             { label: 'Console', click: () => mainWindow?.webContents.send('machina:menu', 'window:console') },
             { label: 'Inspector', click: () => mainWindow?.webContents.send('machina:menu', 'window:inspector') },
-            { label: 'Extension Host', click: () => mainWindow?.webContents.send('machina:menu', 'window:extensions') },
+            { label: 'Plugin Library', click: () => mainWindow?.webContents.send('machina:menu', 'window:extensions') },
           ],
         },
         {
@@ -152,10 +168,15 @@ function buildMenu(): void {
       ],
     },
     {
-      label: 'Extensions',
+      label: 'Plugins',
       submenu: [
-        { label: 'Reload Extensions', click: () => void plugins.discover() },
-        { label: 'Open Extensions Folder', click: () => void shell.openPath(join(app.getPath('userData'), 'plugins')) },
+        { label: 'Plugin Library', accelerator: 'CmdOrCtrl+Shift+X', click: () => mainWindow?.webContents.send('machina:menu', 'window:extensions') },
+        { label: 'Check for Plugin Updates', click: () => void marketplace.getLibrary(true).then(() => mainWindow?.webContents.send('machina:menu', 'window:extensions')).catch((error) => appendOutput('Plugin Library', 'error', error instanceof Error ? error.message : String(error))) },
+        ...(!app.isPackaged ? [
+          { type: 'separator' as const },
+          { label: 'Reload Installed Plugins', click: () => void plugins.discover() },
+          { label: 'Open Development Plugin Folder', click: () => void shell.openPath(join(app.getPath('userData'), 'plugins')) },
+        ] : []),
       ],
     },
     {
@@ -177,9 +198,16 @@ function registerIpc(): void {
   ipcMain.handle('machina:project:open', () => chooseOpen());
   ipcMain.handle('machina:project:save', () => projects.save());
   ipcMain.handle('machina:project:updateItem', (_event, id: string, patch: Record<string, unknown>) => projects.updateItem(id, patch));
+  ipcMain.handle('machina:project:createFolder', (_event, parentId?: string | null) => projects.createFolder(parentId ?? null));
+  ipcMain.handle('machina:project:moveItem', (_event, id: string, parentId: string | null, order: number) => projects.moveItem(id, parentId, order));
+  ipcMain.handle('machina:project:reorderItems', (_event, parentId: string | null, itemIds: string[]) => projects.reorderItems(parentId, itemIds));
+  ipcMain.handle('machina:project:readAsset', (_event, relativePath: string) => projects.readAsset(relativePath));
   ipcMain.handle('machina:plugins:setEnabled', (_event, id: string, enabled: boolean) => plugins.setEnabled(id, enabled));
   ipcMain.handle('machina:plugins:reload', () => plugins.discover());
   ipcMain.handle('machina:plugins:activateEvent', (_event, activationEvent: string) => plugins.activateEvent(activationEvent));
+  ipcMain.handle('machina:plugins:getLibrary', (_event, refresh?: boolean) => marketplace.getLibrary(Boolean(refresh)));
+  ipcMain.handle('machina:plugins:install', (_event, id: string) => marketplace.install(id));
+  ipcMain.handle('machina:plugins:uninstall', (_event, id: string) => marketplace.uninstall(id));
   ipcMain.handle('machina:commands:execute', (_event, id: string, args?: unknown) => plugins.executeCommand(id, args));
   ipcMain.handle('machina:workers:cancel', (_event, id: string) => workers.cancel(id));
   ipcMain.handle('machina:ai:invoke', (_event, pluginId: string, name: string, input: unknown) => plugins.invokeTool(pluginId, name, input));
@@ -214,7 +242,19 @@ app.whenReady().then(async () => {
     settings,
     projects,
     workers,
+    async (options) => {
+      const result = await dialog.showOpenDialog(mainWindow!, {
+        title: options.title ?? 'Open File',
+        properties: ['openFile'],
+        filters: [{ name: 'Supported files', extensions: options.extensions }],
+      });
+      return result.canceled ? null : result.filePaths[0] ?? null;
+    },
   );
+  const localCatalogPath = app.isPackaged
+    ? join(process.resourcesPath, 'marketplace', 'catalog.json')
+    : resolve('marketplace', 'catalog.json');
+  marketplace = new PluginMarketplace(localCatalogPath, join(userData, 'plugins'), plugins);
   projects.on('change', broadcast);
   plugins.on('change', broadcast);
   plugins.on('output', ({ source, level, message }) => appendOutput(source, level, message));

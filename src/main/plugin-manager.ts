@@ -45,6 +45,7 @@ export class PluginManager extends EventEmitter {
     private readonly settings: SettingsStore,
     private readonly projects: ProjectService,
     private readonly workers: WorkerManager,
+    private readonly openFile: (options: { title?: string; extensions: string[] }) => Promise<string | null>,
   ) {
     super();
   }
@@ -115,7 +116,7 @@ export class PluginManager extends EventEmitter {
     );
     if (!plugin) throw new Error(`Unknown plugin command: ${commandId}`);
     await this.activate(plugin);
-    return this.call(plugin.id, 'command.execute', { id: commandId, args });
+    return this.call(plugin.id, 'command.execute', { id: commandId, args }, 310_000);
   }
 
   async invokeTool(pluginId: string, name: string, input: unknown): Promise<unknown> {
@@ -148,6 +149,7 @@ export class PluginManager extends EventEmitter {
       try {
         raw = JSON.parse(await readFile(resolve(pluginRoot, 'manifest.json'), 'utf8')) as unknown;
       } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
         results.push({
           id: `invalid.${entry.name}`,
           name: entry.name,
@@ -196,6 +198,13 @@ export class PluginManager extends EventEmitter {
         if (!safeChild(pluginRoot, candidate)) diagnostics.push({ level: 'error', message: `Worker ${worker.id} escapes plugin root` });
         else {
           try { await access(candidate); } catch { diagnostics.push({ level: 'error', message: `Missing worker entry: ${worker.entry}` }); }
+        }
+      }
+      for (const resource of manifest.resources) {
+        const candidate = resolve(pluginRoot, resource.target);
+        if (!safeChild(pluginRoot, candidate)) diagnostics.push({ level: 'error', message: `Resource target escapes plugin root: ${resource.target}` });
+        else {
+          try { await access(candidate); } catch { diagnostics.push({ level: 'error', message: `Missing resource: ${resource.target}` }); }
         }
       }
       if (source === 'user') {
@@ -329,12 +338,30 @@ export class PluginManager extends EventEmitter {
         this.assertPermission(plugin, 'project.write');
         await this.projects.setPluginState(plugin.id, params.state);
         return null;
+      case 'project.getRoot':
+        this.assertPermission(plugin, 'project.read');
+        return this.projects.path;
+      case 'project.readAsset':
+        this.assertPermission(plugin, 'project.read');
+        return this.projects.readAsset(String(params.relativePath ?? ''));
+      case 'files.open': {
+        this.assertPermission(plugin, 'file.open');
+        const options = params.options as { title?: unknown; extensions?: unknown };
+        const extensions = Array.isArray(options?.extensions)
+          ? options.extensions.filter((value): value is string => typeof value === 'string' && /^[a-z0-9]+$/i.test(value)).slice(0, 10)
+          : [];
+        if (extensions.length === 0) throw new Error('At least one valid file extension is required');
+        return this.openFile({ ...(typeof options.title === 'string' ? { title: options.title.slice(0, 100) } : {}), extensions });
+      }
       case 'worker.start': {
         this.assertPermission(plugin, 'process.worker');
         const worker = plugin.manifest!.contributes.workers.find((item) => item.id === params.workerId);
         if (!worker) throw new Error(`Worker is not declared: ${params.workerId}`);
         return this.workers.start(plugin.id, plugin.path, worker, params.args);
       }
+      case 'worker.wait':
+        this.assertPermission(plugin, 'process.worker');
+        return this.workers.wait(plugin.id, String(params.instanceId));
       default:
         throw new Error(`Unsupported host capability: ${request.method}`);
     }

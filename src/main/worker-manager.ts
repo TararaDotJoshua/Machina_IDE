@@ -9,11 +9,17 @@ interface WorkerRecord {
   child: ChildProcess;
   timer: NodeJS.Timeout;
   definition: NonNullable<PluginManifest['contributes']['workers']>[number];
+  resultReceived: boolean;
+  result?: unknown;
+  resolveCompletion(completion: WorkerCompletion): void;
 }
+
+interface WorkerCompletion { ok: boolean; result?: unknown; error?: string }
 
 export class WorkerManager extends EventEmitter {
   private readonly running = new Map<string, WorkerRecord>();
   private readonly history: WorkerState[] = [];
+  private readonly completions = new Map<string, { pluginId: string; promise: Promise<WorkerCompletion> }>();
 
   constructor() {
     super();
@@ -38,8 +44,11 @@ export class WorkerManager extends EventEmitter {
       startedAt: new Date().toISOString(),
     };
     const timer = setTimeout(() => this.stop(instanceId, 'failed', 'Worker timed out'), definition.timeoutMs);
-    const record: WorkerRecord = { state, child, timer, definition };
+    let resolveCompletion!: (completion: WorkerCompletion) => void;
+    const completion = new Promise<WorkerCompletion>((resolvePromise) => { resolveCompletion = resolvePromise; });
+    const record: WorkerRecord = { state, child, timer, definition, resultReceived: false, resolveCompletion };
     this.running.set(instanceId, record);
+    this.completions.set(instanceId, { pluginId, promise: completion });
     this.output(pluginId, 'info', `Worker ${definition.id} started (${instanceId.slice(0, 8)})`);
     child.stdout?.on('data', (data) => this.output(pluginId, 'info', String(data).trimEnd()));
     child.stderr?.on('data', (data) => {
@@ -48,14 +57,34 @@ export class WorkerManager extends EventEmitter {
         this.output(pluginId, 'error', message);
       }
     });
+    child.on('message', (raw) => {
+      if (!raw || typeof raw !== 'object') return;
+      const message = raw as { type?: unknown; result?: unknown; message?: unknown; percent?: unknown };
+      if (message.type === 'result') {
+        record.resultReceived = true;
+        record.result = message.result;
+      } else if (message.type === 'progress') {
+        const percent = typeof message.percent === 'number' ? ` (${Math.round(message.percent)}%)` : '';
+        this.output(pluginId, 'info', `${String(message.message ?? 'Working')}${percent}`);
+      }
+    });
     child.on('error', (error) => this.stop(instanceId, 'failed', error.message));
     child.on('exit', (code) => {
       if (!this.running.has(instanceId)) return;
-      const status = code === 0 ? 'completed' : 'failed';
-      this.finish(instanceId, status, code);
+      const status = code === 0 && record.resultReceived ? 'completed' : 'failed';
+      this.finish(instanceId, status, code, code === 0 ? 'Worker exited without a result' : `Worker exited with code ${code ?? 'unknown'}`);
     });
     this.emit('change');
     return { id: instanceId };
+  }
+
+  async wait(pluginId: string, instanceId: string): Promise<unknown> {
+    const completion = this.completions.get(instanceId);
+    if (!completion || completion.pluginId !== pluginId) throw new Error('Worker instance is unavailable');
+    const outcome = await completion.promise;
+    this.completions.delete(instanceId);
+    if (!outcome.ok) throw new Error(outcome.error ?? 'Worker failed');
+    return outcome.result;
   }
 
   cancel(instanceId: string): void {
@@ -75,10 +104,10 @@ export class WorkerManager extends EventEmitter {
     if (!record) return;
     this.output(record.state.pluginId, status === 'failed' ? 'error' : 'warn', message);
     record.child.kill();
-    this.finish(id, status, null);
+    this.finish(id, status, null, message);
   }
 
-  private finish(id: string, status: WorkerState['status'], exitCode: number | null): void {
+  private finish(id: string, status: WorkerState['status'], exitCode: number | null, error?: string): void {
     const record = this.running.get(id);
     if (!record) return;
     clearTimeout(record.timer);
@@ -87,6 +116,11 @@ export class WorkerManager extends EventEmitter {
     this.history.push(completed);
     if (this.history.length > 20) this.history.shift();
     this.output(record.state.pluginId, status === 'completed' ? 'info' : 'warn', `Worker ${record.state.workerId} ${status}`);
+    record.resolveCompletion(status === 'completed' ? { ok: true, result: record.result } : { ok: false, error: error ?? 'Worker failed' });
+    if (this.completions.size > 40) {
+      const stale = [...this.completions.keys()].find((completionId) => !this.running.has(completionId));
+      if (stale) this.completions.delete(stale);
+    }
     this.emit('change');
   }
 

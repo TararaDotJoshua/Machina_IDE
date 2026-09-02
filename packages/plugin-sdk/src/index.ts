@@ -8,6 +8,7 @@ export interface ScopedLogger {
 
 export interface WorkerHandle {
   id: string;
+  result<T>(): Promise<T>;
 }
 
 export interface PluginContext {
@@ -24,6 +25,11 @@ export interface PluginContext {
   project: {
     getState<T>(): Promise<T | undefined>;
     setState<T>(state: T): Promise<void>;
+    getRoot(): Promise<string | null>;
+    readAsset<T>(relativePath: string): Promise<T>;
+  };
+  files: {
+    open(options: { title?: string; extensions: string[] }): Promise<string | null>;
   };
   workers: {
     start(workerId: string, args?: unknown): Promise<WorkerHandle>;

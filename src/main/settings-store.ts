@@ -3,6 +3,7 @@ import { dirname } from 'node:path';
 
 interface Settings {
   pluginEnablement: Record<string, boolean>;
+  interfaceScale?: number;
   lastProject?: string;
 }
 
@@ -34,6 +35,16 @@ export class SettingsStore {
 
   async setLastProject(path: string): Promise<void> {
     this.data.lastProject = path;
+    await this.save();
+  }
+
+  get interfaceScale(): number {
+    const value = this.data.interfaceScale;
+    return typeof value === 'number' && value >= 0.75 && value <= 2 ? value : 1;
+  }
+
+  async setInterfaceScale(value: number): Promise<void> {
+    this.data.interfaceScale = Math.max(0.75, Math.min(2, value));
     await this.save();
   }
 

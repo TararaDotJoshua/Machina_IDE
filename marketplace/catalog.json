@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-09-02T14:00:00.000Z",
+  "plugins": [
+    {
+      "id": "dev.machina.step-import",
+      "name": "STEP Import",
+      "version": "1.0.0-beta.5",
+      "description": "Import STEP and STP models into a project-backed interactive 3D window using OpenCASCADE.",
+      "publisher": "Machina",
+      "license": "MIT / OpenCASCADE LGPL exception",
+      "homepage": "https://github.com/TararaDotJoshua/Machina_IDE",
+      "repository": "https://github.com/TararaDotJoshua/Machina_IDE",
+      "categories": ["Mechanical", "CAD", "Import"],
+      "verified": true,
+      "bundled": true,
+      "engines": { "mechatronicsIDE": ">=1.0.0-beta.5 <2.0.0" },
+      "permissions": ["project.read", "project.write", "file.open", "ui.panels", "process.worker", "ai.tools"]
+    }
+  ]
+}

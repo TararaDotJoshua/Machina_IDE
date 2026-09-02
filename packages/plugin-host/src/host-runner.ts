@@ -76,11 +76,26 @@ function makeContext(): PluginContext {
         requirePermission('project.write');
         await call('project.setState', { state });
       },
+      getRoot: async () => {
+        requirePermission('project.read');
+        return call('project.getRoot');
+      },
+      readAsset: async <T>(relativePath: string) => {
+        requirePermission('project.read');
+        return call('project.readAsset', { relativePath }) as Promise<T>;
+      },
+    },
+    files: {
+      open: async (options) => {
+        requirePermission('file.open');
+        return call('files.open', { options });
+      },
     },
     workers: {
       start: async (workerId, args) => {
         requirePermission('process.worker');
-        return call('worker.start', { workerId, args });
+        const handle = await call('worker.start', { workerId, args }) as { id: string };
+        return { id: handle.id, result: <T>() => call('worker.wait', { instanceId: handle.id }) as Promise<T> };
       },
     },
   };

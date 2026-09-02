@@ -163,6 +163,7 @@ kbd { font-family: 'JetBrains Mono', monospace; color: #8997a5; background: #182
 .viewport-empty { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; pointer-events: none; color: #637180; }
 .viewport-empty strong { color: #aeb9c3; font-size: 12px; }
 .viewport-empty span { font-size: 10px; }
+.plugin-json-view { flex: 1; min-height: 0; margin: 0; padding: 14px; overflow: auto; color: #9fb0bd; background: #0b1016; font: 10px/1.55 'JetBrains Mono', monospace; }
 .selection-heading { display: flex; align-items: center; gap: 9px; padding: 11px; border-bottom: 1px solid var(--line); }
 .selection-icon { width: 34px; height: 34px; display: grid; place-items: center; border: 1px solid #2c3946; border-radius: 5px; background: #151e27; color: var(--accent); }
 .selection-heading > div:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; }
@@ -219,6 +220,13 @@ kbd { font-family: 'JetBrains Mono', monospace; color: #8997a5; background: #182
 .extension-copy small { color: #65b987; text-transform: uppercase; letter-spacing: .5px; }
 .extension-card.invalid .extension-copy small, .extension-card.failed .extension-copy small { color: var(--danger); }
 .extension-copy em { color: #ee8d93; font-style: normal; font-size: 9px; line-height: 14px; overflow-wrap: anywhere; }
+.tree-rename { min-width: 0; flex: 1; height: 20px; padding: 1px 5px; border: 1px solid #2690b8; border-radius: 2px; outline: 0; background: #0b1219; color: #e4edf3; font-size: 10px; }
+.tree-context-menu { position: fixed; z-index: 250; min-width: 205px; max-height: 360px; overflow: auto; padding: 5px; border: 1px solid #354655; border-radius: 5px; background: #131b24; box-shadow: 0 16px 45px #000b; }
+.tree-context-menu button { width: 100%; min-height: 28px; display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 0; border-radius: 3px; background: transparent; color: #bdc8d1; font-size: 10px; text-align: left; }
+.tree-context-menu button:hover:not(:disabled) { background: #1c2c37; color: #e5edf2; }
+.tree-context-menu button:disabled { opacity: .35; }
+.tree-context-menu button kbd { margin-left: auto; color: #6e7d89; }
+.tree-context-menu > div { height: 1px; margin: 4px; background: #28343e; }
 .switch { width: 27px; height: 15px; position: relative; margin-top: 3px; }
 .switch input { opacity: 0; width: 0; height: 0; }
 .switch span { position: absolute; inset: 0; border-radius: 10px; background: #25313c; border: 1px solid #34424f; }
@@ -241,6 +249,52 @@ kbd { font-family: 'JetBrains Mono', monospace; color: #8997a5; background: #182
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .chips span { padding: 3px 5px; background: #18232d; border: 1px solid #273743; color: #91a9b9; border-radius: 3px; font: 8px 'JetBrains Mono', monospace; }
 .mono-list { white-space: pre-line; color: #8da0ae; font: 9px/15px 'JetBrains Mono', monospace; overflow-wrap: anywhere; }
+
+.plugin-library { overflow: auto; background: radial-gradient(circle at 12% 0, #163b4d66, transparent 34%), var(--surface-0); }
+.plugin-library-header { min-height: 112px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 24px 30px; border-bottom: 1px solid var(--line); }
+.plugin-library-header p { margin: 0 0 4px; color: var(--accent); font-size: 9px; letter-spacing: 1px; }
+.plugin-library-header h1 { margin: 0 0 5px; color: #e3eaf0; font-size: 23px; }
+.plugin-library-header span { color: var(--muted); font-size: 11px; }
+.library-refresh, .market-primary { display: flex; align-items: center; justify-content: center; gap: 6px; min-height: 29px; padding: 0 11px; border: 1px solid #2a7898; border-radius: 4px; background: #145475; color: #dbf5ff; font-size: 10px; }
+.library-refresh:hover, .market-primary:hover { background: #176486; }
+.library-refresh:disabled, .market-primary:disabled { opacity: .55; }
+.library-toolbar { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 10px 18px; border-bottom: 1px solid var(--line); background: #0d131beF; backdrop-filter: blur(10px); }
+.library-tabs { display: flex; align-items: center; gap: 3px; }
+.library-tabs button { height: 28px; padding: 0 10px; border: 0; border-radius: 4px; background: transparent; color: #83919e; font-size: 10px; }
+.library-tabs button:hover, .library-tabs button.active { background: #1a2631; color: #d8e1e8; }
+.library-tabs button span { margin-left: 6px; padding: 1px 5px; border-radius: 8px; background: #15597a; color: #bfeeff; font-size: 8px; }
+.library-search { width: min(290px, 42%); height: 29px; display: flex; align-items: center; gap: 7px; padding: 0 9px; border: 1px solid #2b3844; border-radius: 4px; background: #111923; color: #60717f; }
+.library-search:focus-within { border-color: #2782a8; color: #64c9ed; }
+.library-search input { width: 100%; border: 0; outline: 0; background: transparent; color: #d4dde4; font-size: 10px; }
+.library-notice { display: flex; align-items: center; gap: 7px; margin: 12px 18px 0; padding: 8px 10px; border: 1px solid #69562c; border-radius: 4px; background: #2b2518; color: #d6b66f; font-size: 9px; }
+.plugin-market-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; padding: 16px 18px 22px; }
+.market-card { min-height: 138px; display: grid; grid-template-columns: 44px minmax(0, 1fr); grid-template-rows: 1fr auto; gap: 9px 12px; padding: 14px; border: 1px solid #26343f; border-radius: 7px; background: #111922e8; box-shadow: 0 7px 20px #0002; }
+.market-card:hover { border-color: #385060; background: #131d27; }
+.market-icon { width: 44px; height: 44px; display: grid; place-items: center; border: 1px solid #2b5366; border-radius: 8px; background: linear-gradient(145deg, #153448, #17232d); color: #68c8eb; }
+.market-copy { min-width: 0; }
+.market-title { display: flex; align-items: center; gap: 6px; }
+.market-title strong { color: #e1e8ee; font-size: 13px; }
+.market-title svg { color: #55c98c; }
+.market-copy > span { display: block; margin-top: 2px; color: #758592; font-size: 9px; }
+.market-copy p { min-height: 30px; margin: 9px 0 8px; color: #a5b2bc; font-size: 10px; line-height: 15px; }
+.market-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.market-tags span { padding: 2px 5px; border-radius: 3px; background: #17242e; color: #7fa0b3; font-size: 8px; }
+.market-actions { grid-column: 1 / -1; display: flex; align-items: center; justify-content: flex-end; gap: 7px; padding-top: 9px; border-top: 1px solid var(--line-soft); }
+.market-actions .switch { margin: 0 2px 0 0; }
+.market-actions .icon-button { width: 28px; height: 28px; }
+.market-actions .icon-button.danger { color: #d2767d; }
+.market-actions .icon-button.danger:hover { background: #321e23; }
+.included-badge { padding: 4px 8px; border: 1px solid #2f6749; border-radius: 10px; color: #70c894; font-size: 9px; }
+.inspector-input { width: 100%; height: 24px; padding: 2px 6px; border: 1px solid transparent; border-radius: 3px; outline: 0; background: transparent; color: #c8d3dc; font: 9px 'JetBrains Mono', monospace; }
+.inspector-input:hover { border-color: #2b3945; background: #111922; }
+.inspector-input:focus { border-color: #2a83a8; background: #0b141c; }
+.inspector-checkbox { display: flex; align-items: center; gap: 6px; color: #b9c7d0; font-size: 9px; }
+.inspector-checkbox input { accent-color: #2382aa; }
+.window-error, .root-error { height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; padding: 24px; color: #738391; text-align: center; }
+.window-error strong, .root-error strong { color: #d7e0e7; font-size: 12px; }
+.window-error span, .root-error span { max-width: 520px; color: #d08087; font-size: 10px; line-height: 1.5; }
+.window-error button, .root-error button { margin-top: 5px; padding: 6px 11px; border: 1px solid #326f8a; border-radius: 4px; background: #17435a; color: #d7eff8; font-size: 10px; }
+.root-error { min-height: 100vh; background: var(--surface-0); }
 
 .domain-empty { flex: 1; min-height: 150px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #637180; text-align: center; }
 .domain-empty strong { color: #aeb9c3; font-size: 12px; }

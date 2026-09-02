@@ -1,4 +1,5 @@
 import { EventEmitter } from 'node:events';
+import semver from 'semver';
 import type { UpdateState } from '@mechatronics-ide/core';
 
 interface UpdateInfo {
@@ -18,6 +19,7 @@ export interface UpdateBackend {
   channel: string | null;
   on(event: string, listener: (...args: unknown[]) => void): unknown;
   checkForUpdates(): Promise<unknown>;
+  downloadUpdate(): Promise<unknown>;
   quitAndInstall(isSilent?: boolean, isForceRunAfter?: boolean): void;
 }
 
@@ -45,16 +47,27 @@ export class UpdateService extends EventEmitter {
   initialize(): void {
     if (this.initialized || !this.options.packaged) return;
     this.initialized = true;
-    this.backend.autoDownload = true;
-    this.backend.autoInstallOnAppQuit = true;
+    this.backend.autoDownload = false;
+    this.backend.autoInstallOnAppQuit = false;
     this.backend.allowPrerelease = true;
     this.backend.channel = 'beta';
     this.backend.on('checking-for-update', () => this.setState({ status: 'checking', message: 'Checking for updates' }));
     this.backend.on('update-available', (value) => {
       const info = value as UpdateInfo;
+      if (!isNewerVersion(info.version, this.options.currentVersion)) {
+        this.setState({ status: 'not-available', message: `Blocked non-newer update ${info.version ?? 'with an invalid version'}`, checkedAt: new Date().toISOString() });
+        this.options.log('warn', `Blocked update ${info.version ?? 'unknown'} because Machina ${this.options.currentVersion} is already newer`);
+        return;
+      }
       this.setState({ status: 'available', ...(info.version ? { availableVersion: info.version } : {}), message: `Downloading Machina ${info.version ?? 'update'}` });
+      void this.backend.downloadUpdate().catch((error) => {
+        const message = error instanceof Error ? error.message : String(error);
+        this.setState({ status: 'error', message, checkedAt: new Date().toISOString() });
+        this.options.log('error', `Update download failed: ${message}`);
+      });
     });
     this.backend.on('download-progress', (value) => {
+      if (this.state.status !== 'available' && this.state.status !== 'downloading') return;
       const progress = value as DownloadProgress;
       this.setState({
         status: 'downloading',
@@ -70,6 +83,11 @@ export class UpdateService extends EventEmitter {
     });
     this.backend.on('update-downloaded', (value) => {
       const info = value as UpdateInfo;
+      if (!isNewerVersion(info.version, this.options.currentVersion)) {
+        this.setState({ status: 'not-available', message: `Blocked non-newer update ${info.version ?? 'with an invalid version'}`, checkedAt: new Date().toISOString() });
+        this.options.log('warn', `Refused downloaded update ${info.version ?? 'unknown'} because it is not newer than ${this.options.currentVersion}`);
+        return;
+      }
       this.setState({ status: 'downloaded', ...(info.version ? { availableVersion: info.version } : {}), percent: 100, message: 'Update ready to install', checkedAt: new Date().toISOString() });
       this.options.log('info', `Machina ${info.version ?? 'update'} downloaded and ready to install`);
     });
@@ -112,6 +130,7 @@ export class UpdateService extends EventEmitter {
 
   async install(): Promise<void> {
     if (this.state.status !== 'downloaded') throw new Error('No downloaded update is ready to install');
+    if (!isNewerVersion(this.state.availableVersion, this.options.currentVersion)) throw new Error('Refusing to install an older or equal version');
     await this.options.beforeInstall();
     this.options.log('info', 'Restarting Machina to install the update');
     this.backend.quitAndInstall(false, true);
@@ -121,4 +140,8 @@ export class UpdateService extends EventEmitter {
     this.state = { ...this.state, ...patch };
     this.emit('change', this.getState());
   }
+}
+
+function isNewerVersion(candidate: string | undefined, current: string): boolean {
+  return Boolean(candidate && semver.valid(candidate) && semver.valid(current) && semver.gt(candidate, current));
 }
