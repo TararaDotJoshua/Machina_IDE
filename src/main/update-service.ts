@@ -47,8 +47,8 @@ export class UpdateService extends EventEmitter {
     this.initialized = true;
     this.backend.autoDownload = true;
     this.backend.autoInstallOnAppQuit = true;
-    this.backend.allowPrerelease = false;
-    this.backend.channel = 'latest';
+    this.backend.allowPrerelease = true;
+    this.backend.channel = 'beta';
     this.backend.on('checking-for-update', () => this.setState({ status: 'checking', message: 'Checking for updates' }));
     this.backend.on('update-available', (value) => {
       const info = value as UpdateInfo;

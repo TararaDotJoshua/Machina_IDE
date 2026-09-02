@@ -17,7 +17,7 @@ function createService(packaged = true): { backend: FakeUpdater; service: Update
   const log = vi.fn();
   const service = new UpdateService(backend, {
     packaged,
-    currentVersion: '1.0.0',
+    currentVersion: '1.0.0-beta.1',
     log,
     beforeInstall,
   });
@@ -32,21 +32,21 @@ describe('UpdateService', () => {
     expect(backend.checkForUpdates).not.toHaveBeenCalled();
   });
 
-  it('configures the stable channel and publishes download progress', () => {
+  it('configures the beta channel and publishes download progress', () => {
     const { backend, service } = createService();
     service.initialize();
-    backend.emit('update-available', { version: '1.0.1' });
+    backend.emit('update-available', { version: '1.0.0-beta.2' });
     backend.emit('download-progress', { percent: 42.4, transferred: 424, total: 1000 });
     expect(backend.autoDownload).toBe(true);
-    expect(backend.allowPrerelease).toBe(false);
-    expect(backend.channel).toBe('latest');
+    expect(backend.allowPrerelease).toBe(true);
+    expect(backend.channel).toBe('beta');
     expect(service.getState()).toMatchObject({ status: 'downloading', percent: 42.4, transferred: 424, total: 1000 });
   });
 
   it('saves state before restarting into a downloaded update', async () => {
     const { backend, service, beforeInstall } = createService();
     service.initialize();
-    backend.emit('update-downloaded', { version: '1.0.1' });
+    backend.emit('update-downloaded', { version: '1.0.0-beta.2' });
     await service.install();
     expect(beforeInstall).toHaveBeenCalledOnce();
     expect(backend.quitAndInstall).toHaveBeenCalledWith(false, true);

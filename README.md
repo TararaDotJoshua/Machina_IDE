@@ -1,4 +1,4 @@
-# Machina IDE 1.0.0
+# Machina IDE 1.0.0-beta.1
 
 Machina IDE is a desktop-first, web-portable engineering workspace for mechatronics projects. The core application provides project persistence, rearrangeable workspaces, an interactive Three.js viewport, and a permission-gated extension runtime.
 
@@ -13,15 +13,15 @@ Engineering capabilities are supplied by extensions. The core never fabricates g
 - Navigate a Three.js engineering viewport that is ready for geometry supplied by extensions.
 - Review extension diagnostics, worker activity, and application output.
 - Discover, validate, enable, disable, reload, and isolate user-installed extensions.
-- Receive signed stable releases through the built-in updater.
+- Receive beta releases through the built-in updater.
 
 New projects are empty by design. Machina does not seed sample assemblies or display inferred engineering content.
 
-## Updates and releases
+## Beta updates and releases
 
-Packaged Windows builds check the stable GitHub Releases channel shortly after startup and every four hours. Updates download in the background; Machina offers **Restart now** or **Later** and saves the open project before installing. Updates can also be checked from Help → Check for Updates.
+Packaged Windows builds check the GitHub Releases beta channel shortly after startup and every four hours. Updates download in the background; Machina offers **Restart now** or **Later** and saves the open project before installing. Updates can also be checked from Help → Check for Updates.
 
-Production publishing requires repository secrets named `WINDOWS_CERTIFICATE` and `WINDOWS_CERTIFICATE_PASSWORD`. Push a stable tag matching the package version, such as `v1.0.0`, to run the release workflow. The workflow rejects prerelease versions and unsigned publishing, runs the complete verified build, and publishes the signed NSIS installer, blockmap, and `latest.yml` update metadata.
+Push a beta tag matching the package version, such as `v1.0.0-beta.1`, to run the release workflow. The workflow validates the tag, runs the complete verified build, and publishes the NSIS installer, blockmap, `beta.yml`, and `latest.yml` compatibility metadata.
 
 ## Run and build
 

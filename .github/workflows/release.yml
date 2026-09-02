@@ -1,15 +1,15 @@
-name: Publish Windows Release
+name: Publish Windows Beta
 
 on:
   push:
     tags:
-      - 'v*'
+      - 'v*-beta.*'
 
 permissions:
   contents: write
 
 jobs:
-  publish-windows:
+  publish-windows-beta:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
@@ -22,7 +22,7 @@ jobs:
           node-version: 20
           cache: npm
 
-      - name: Verify stable release tag
+      - name: Verify beta release tag
         shell: pwsh
         run: |
           $version = node -p "require('./package.json').version"
@@ -30,18 +30,8 @@ jobs:
           if ('${{ github.ref_name }}' -ne $expected) {
             throw "Tag '${{ github.ref_name }}' must match package version '$expected'."
           }
-          if ($version.Contains('-')) {
-            throw "Production releases require a stable semantic version."
-          }
-
-      - name: Require Windows signing credentials
-        shell: pwsh
-        env:
-          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
-        run: |
-          if (-not $env:CSC_LINK -or -not $env:CSC_KEY_PASSWORD) {
-            throw "Configure WINDOWS_CERTIFICATE and WINDOWS_CERTIFICATE_PASSWORD before publishing."
+          if (-not $version.Contains('-beta.')) {
+            throw "Beta releases require a beta semantic version."
           }
 
       - name: Install dependencies
@@ -50,12 +40,10 @@ jobs:
       - name: Verify source
         run: npm run lint
 
-      - name: Build and publish signed release
-        run: npm run release
+      - name: Build and publish beta
+        run: npm run release:beta
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CSC_LINK: ${{ secrets.WINDOWS_CERTIFICATE }}
-          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
 
       - name: Verify updater assets
         shell: pwsh
@@ -65,13 +53,16 @@ jobs:
           $version = node -p "require('./package.json').version"
           $installer = "release/Machina-IDE-$version-Windows-x64.exe"
           $blockmap = "$installer.blockmap"
-          $metadata = "release/latest.yml"
-          gh release upload "${{ github.ref_name }}" $installer $blockmap $metadata --clobber
+          $betaMetadata = "release/beta.yml"
+          $latestMetadata = "release/latest.yml"
+          Copy-Item -LiteralPath $betaMetadata -Destination $latestMetadata
+          gh release upload "${{ github.ref_name }}" $installer $blockmap $betaMetadata $latestMetadata --clobber
 
           $published = gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name'
           @(
             "Machina-IDE-$version-Windows-x64.exe",
             "Machina-IDE-$version-Windows-x64.exe.blockmap",
+            "beta.yml",
             "latest.yml"
           ) | ForEach-Object {
             if ($_ -notin $published) { throw "Required release asset was not published: $_" }

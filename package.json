@@ -1,6 +1,6 @@
 {
   "name": "machina-ide",
-  "version": "1.0.0",
+  "version": "1.0.0-beta.1",
   "private": true,
   "author": "Machina IDE Contributors",
   "description": "Desktop-first engineering workspace for mechatronics projects",
@@ -22,7 +22,7 @@
     "build": "npm run typecheck && npm run test && npm run build:plugins && electron-vite build",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
-    "release": "npm run build && electron-builder --win nsis --publish always",
+    "release:beta": "npm run build && electron-builder --win nsis --publish always",
     "build:plugins": "node scripts/build-plugins.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run build:plugins && vitest run",
@@ -83,8 +83,8 @@
       "provider": "github",
       "owner": "TararaDotJoshua",
       "repo": "Machina_IDE",
-      "channel": "latest",
-      "releaseType": "release"
+      "channel": "beta",
+      "releaseType": "prerelease"
     },
     "win": {
       "target": "nsis",
