@@ -1,7 +1,7 @@
 {
   "id": "dev.machina.step-import",
   "name": "STEP Import",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "engines": {
     "mechatronicsIDE": ">=1.0.0-beta.2 <2.0.0"
   },

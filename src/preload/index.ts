@@ -4,6 +4,7 @@ import type { AppSnapshot, MachinaBridge, UpdateState } from '@mechatronics-ide/
 const bridge: MachinaBridge = {
   app: {
     getSnapshot: () => ipcRenderer.invoke('machina:getSnapshot'),
+    getInterfaceScale: () => ipcRenderer.invoke('machina:getInterfaceScale'),
     subscribe: (listener) => {
       const handler = (_event: Electron.IpcRendererEvent, snapshot: AppSnapshot) => listener(snapshot);
       ipcRenderer.on('machina:snapshot', handler);

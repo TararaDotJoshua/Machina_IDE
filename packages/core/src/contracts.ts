@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const API_VERSION = 1 as const;
-export const APP_VERSION = '1.0.0-beta.6';
+export const APP_VERSION = '1.0.0-beta.7';
 
 export const permissionSchema = z.enum([
   'project.read',
@@ -316,6 +316,7 @@ export interface UpdateState {
 export interface MachinaBridge {
   app: {
     getSnapshot(): Promise<AppSnapshot>;
+    getInterfaceScale(): Promise<number>;
     subscribe(listener: (snapshot: AppSnapshot) => void): Unsubscribe;
     subscribeMenu(listener: (action: string) => void): Unsubscribe;
   };

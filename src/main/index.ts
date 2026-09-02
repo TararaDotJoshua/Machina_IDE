@@ -71,7 +71,6 @@ async function createWindow(): Promise<void> {
   });
   if (!app.isPackaged && process.env.ELECTRON_RENDERER_URL) await mainWindow.loadURL(process.env.ELECTRON_RENDERER_URL);
   else await mainWindow.loadFile(join(__dirname, '../renderer/index.html'));
-  mainWindow.webContents.setZoomFactor(settings.interfaceScale);
 }
 
 async function chooseCreate(): Promise<Awaited<ReturnType<ProjectService['createAt']>> | null> {
@@ -124,8 +123,8 @@ function buildMenu(): void {
             type: 'radio' as const,
             checked: settings.interfaceScale === factor,
             click: () => {
-              mainWindow?.webContents.setZoomFactor(factor);
               void settings.setInterfaceScale(factor);
+              mainWindow?.webContents.send('machina:menu', `scale:${factor}`);
             },
           })),
         },
@@ -194,6 +193,7 @@ function buildMenu(): void {
 
 function registerIpc(): void {
   ipcMain.handle('machina:getSnapshot', () => snapshot());
+  ipcMain.handle('machina:getInterfaceScale', () => settings.interfaceScale);
   ipcMain.handle('machina:project:create', () => chooseCreate());
   ipcMain.handle('machina:project:open', () => chooseOpen());
   ipcMain.handle('machina:project:save', () => projects.save());

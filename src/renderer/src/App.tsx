@@ -77,8 +77,8 @@ const CORE_WINDOWS: CoreWindowId[] = ['project', 'viewer', 'console', 'inspector
 
 export function App(): React.JSX.Element {
   const { snapshot, setSnapshot, paletteOpen, setPaletteOpen, notification, notify, updateState, setUpdateState } = useIdeStore();
-  const pluginWindows = (snapshot?.contributions ?? []).flatMap((entry) => entry.contributes.windows.filter((window) => window.kind !== 'viewportScene').map((window) => ({ ...window, pluginId: entry.pluginId, runtimeId: `plugin:${entry.pluginId}:${window.id}` })));
-  const allWindows = [...CORE_WINDOWS, ...pluginWindows.map((window) => window.runtimeId)];
+  const pluginWindows = useMemo(() => (snapshot?.contributions ?? []).flatMap((entry) => entry.contributes.windows.filter((window) => window.kind !== 'viewportScene').map((window) => ({ ...window, pluginId: entry.pluginId, runtimeId: `plugin:${entry.pluginId}:${window.id}` }))), [snapshot?.contributions]);
+  const allWindows = useMemo(() => [...CORE_WINDOWS, ...pluginWindows.map((window) => window.runtimeId)], [pluginWindows]);
   const [presetId, setPresetId] = useState<WorkspacePresetId>('system');
   const [windowRects, setWindowRects] = useState<Partial<Record<WorkspaceWindowId, WindowRect>>>(() => createPresetRects('system', []));
   const [hiddenWindows, setHiddenWindows] = useState<Set<WorkspaceWindowId>>(() => hiddenForPreset('system', []));
@@ -92,6 +92,15 @@ export function App(): React.JSX.Element {
   const pluginWindowSignature = pluginWindows.map((window) => `${window.runtimeId}:${window.defaultWorkspaces.join(',')}`).join('|');
   const appliedPluginWindowSignature = useRef('');
 
+  const bringWindowToFront = useCallback((id: WorkspaceWindowId) => {
+    zCounter.current += 1;
+    setActiveWindow(id);
+    setWindowRects((current) => ({
+      ...current,
+      [id]: { ...(current[id] ?? { x: 18, y: 16, width: 46, height: 44, z: 1 }), z: zCounter.current },
+    }));
+  }, []);
+
   const applyPreset = useCallback((nextId: WorkspacePresetId) => {
     const preset = WORKSPACE_PRESETS.find((item) => item.id === nextId)!;
     setPresetId(nextId);
@@ -100,6 +109,8 @@ export function App(): React.JSX.Element {
     setTileMode('floating');
     setWindowOrder(presetWindowOrder(nextId, pluginWindows));
     setMaximizedWindow(null);
+    setDockPreview(null);
+    zCounter.current = CORE_WINDOWS.length + pluginWindows.length + 1;
     const first = Object.keys(preset.windows)[0] as WorkspaceWindowId;
     setActiveWindow(first);
     useIdeStore.getState().setWorkspace(preset.storeWorkspace);
@@ -128,6 +139,7 @@ export function App(): React.JSX.Element {
 
   useEffect(() => {
     void window.machina.app.getSnapshot().then(setSnapshot);
+    void window.machina.app.getInterfaceScale().then(applyInterfaceScale);
     const unsubscribe = window.machina.app.subscribe(setSnapshot);
     void window.machina.updates.getState().then(setUpdateState);
     const unsubscribeUpdates = window.machina.updates.subscribe((state) => {
@@ -136,6 +148,7 @@ export function App(): React.JSX.Element {
     });
     const unsubscribeMenu = window.machina.app.subscribeMenu((action) => {
       if (action === 'commandPalette') setPaletteOpen(true);
+      if (action.startsWith('scale:')) applyInterfaceScale(Number(action.slice('scale:'.length)));
       if (action.startsWith('workspace:')) applyPreset(action.slice('workspace:'.length) as WorkspacePresetId);
       if (action.startsWith('tiling:')) applyTileMode(action.slice('tiling:'.length) as TileMode);
       if (action.startsWith('window:')) {
@@ -146,9 +159,7 @@ export function App(): React.JSX.Element {
           if (tileMode !== 'floating') setWindowRects((rects) => tileWindowRects(rects, windowOrder.filter((windowId) => !next.has(windowId)), tileMode));
           return next;
         });
-        setActiveWindow(id);
-        zCounter.current += 1;
-        setWindowRects((current) => ({ ...current, [id]: { ...(current[id] ?? { x: 18, y: 16, width: 46, height: 44, z: 1 }), z: zCounter.current } }));
+        bringWindowToFront(id);
       }
     });
     const keydown = (event: KeyboardEvent) => {
@@ -160,7 +171,7 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', keydown);
     return () => { unsubscribe(); unsubscribeUpdates(); unsubscribeMenu(); window.removeEventListener('keydown', keydown); };
-  }, [applyPreset, applyTileMode, setPaletteOpen, setSnapshot, setUpdateState, tileMode, windowOrder]);
+  }, [applyPreset, applyTileMode, bringWindowToFront, setPaletteOpen, setSnapshot, setUpdateState, tileMode, windowOrder]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -178,6 +189,7 @@ export function App(): React.JSX.Element {
   if (!snapshot) return <div className="loading"><Gauge className="spin" /> Initializing engineering workspace…</div>;
 
   const toggleWindow = (id: WorkspaceWindowId) => {
+    const opening = hiddenWindows.has(id);
     setHiddenWindows((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id); else next.add(id);
@@ -185,12 +197,9 @@ export function App(): React.JSX.Element {
       return next;
     });
     if (maximizedWindow === id) setMaximizedWindow(null);
+    if (opening) bringWindowToFront(id);
   };
-  const activateWindow = (id: WorkspaceWindowId) => {
-    setActiveWindow(id);
-    zCounter.current += 1;
-    setWindowRects((current) => ({ ...current, [id]: current[id] ? { ...current[id]!, z: zCounter.current } : undefined }));
-  };
+  const activateWindow = bringWindowToFront;
   const updateWindowRect = (id: WorkspaceWindowId, rect: WindowRect) => {
     setTileMode('floating');
     setWindowRects((current) => ({ ...current, [id]: rect }));
@@ -723,6 +732,11 @@ function UpdatePrompt({ state, onLater }: { state: UpdateState; onLater(): void 
 function PaneHeader({ title, action }: { title: string; action?: React.ReactNode }): React.JSX.Element { return <div className="pane-header"><span>{title}</span>{action && <div>{action}</div>}</div>; }
 
 function clamp(value: number, min: number, max: number): number { return Math.min(max, Math.max(min, value)); }
+function applyInterfaceScale(value: number): void {
+  const scale = Number.isFinite(value) ? clamp(value, 0.75, 2) : 1;
+  document.documentElement.style.setProperty('--interface-scale', String(scale));
+  document.documentElement.style.setProperty('--interface-size', `${100 / scale}%`);
+}
 function titleCase(value: string): string { return value.replace(/([A-Z])/g, ' $1').replace(/^./, (letter) => letter.toUpperCase()); }
 function flattenProjectItems(items: ProjectItem[]): ProjectItem[] { return items.flatMap((item) => [item, ...flattenProjectItems(item.children)]); }
 function createPresetRects(id: WorkspacePresetId, pluginWindows: PluginWindowDescriptor[]): Partial<Record<WorkspaceWindowId, WindowRect>> {
