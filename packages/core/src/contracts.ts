@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 export const API_VERSION = 1 as const;
-export const APP_VERSION = '0.2.0-beta.1';
+export const APP_VERSION = '0.2.0-beta.2';
 
 export const permissionSchema = z.enum([
   'project.read',
@@ -230,6 +230,17 @@ export type RpcResponse = z.infer<typeof rpcResponseSchema>;
 export type RpcEvent = z.infer<typeof rpcEventSchema>;
 
 export type Unsubscribe = () => void;
+export type UpdateStatus = 'disabled' | 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error';
+export interface UpdateState {
+  status: UpdateStatus;
+  currentVersion: string;
+  availableVersion?: string;
+  percent?: number;
+  transferred?: number;
+  total?: number;
+  message?: string;
+  checkedAt?: string;
+}
 export interface MachinaBridge {
   app: {
     getSnapshot(): Promise<AppSnapshot>;
@@ -250,4 +261,10 @@ export interface MachinaBridge {
   commands: { execute(commandId: string, args?: unknown): Promise<unknown> };
   workers: { cancel(instanceId: string): Promise<void> };
   ai: { invoke(pluginId: string, toolName: string, input: unknown): Promise<unknown> };
+  updates: {
+    getState(): Promise<UpdateState>;
+    check(): Promise<UpdateState>;
+    install(): Promise<void>;
+    subscribe(listener: (state: UpdateState) => void): Unsubscribe;
+  };
 }

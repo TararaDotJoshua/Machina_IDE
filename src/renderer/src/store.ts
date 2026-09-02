@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AppSnapshot, ProjectItem } from '@mechatronics-ide/core';
+import type { AppSnapshot, ProjectItem, UpdateState } from '@mechatronics-ide/core';
 
 interface UiState {
   snapshot: AppSnapshot | null;
@@ -9,6 +9,7 @@ interface UiState {
   bottomTab: string;
   paletteOpen: boolean;
   notification: string | null;
+  updateState: UpdateState;
   setSnapshot(snapshot: AppSnapshot): void;
   setWorkspace(workspace: string): void;
   select(id: string): void;
@@ -16,6 +17,7 @@ interface UiState {
   setBottomTab(tab: string): void;
   setPaletteOpen(open: boolean): void;
   notify(message: string | null): void;
+  setUpdateState(updateState: UpdateState): void;
 }
 
 export const useIdeStore = create<UiState>((set) => ({
@@ -26,6 +28,7 @@ export const useIdeStore = create<UiState>((set) => ({
   bottomTab: 'output',
   paletteOpen: false,
   notification: null,
+  updateState: { status: 'disabled', currentVersion: '0.0.0' },
   setSnapshot: (snapshot) => set((state) => {
     const selectedId = findProjectItem(snapshot.project?.treeItems ?? [], state.selectedId)
       ? state.selectedId
@@ -46,6 +49,7 @@ export const useIdeStore = create<UiState>((set) => ({
   setBottomTab: (bottomTab) => set({ bottomTab }),
   setPaletteOpen: (paletteOpen) => set({ paletteOpen }),
   notify: (notification) => set({ notification }),
+  setUpdateState: (updateState) => set({ updateState }),
 }));
 
 export function findProjectItem(items: ProjectItem[], id: string | null): ProjectItem | undefined {

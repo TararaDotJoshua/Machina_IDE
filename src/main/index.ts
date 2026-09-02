@@ -2,11 +2,13 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, shell } from 'electron';
 import { basename, join, resolve } from 'node:path';
 import { mkdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
+import { autoUpdater } from 'electron-updater';
 import type { AppSnapshot, OutputEntry } from '@mechatronics-ide/core';
 import { ProjectService } from './project-service';
 import { SettingsStore } from './settings-store';
 import { WorkerManager } from './worker-manager';
 import { PluginManager } from './plugin-manager';
+import { UpdateService } from './update-service';
 
 let mainWindow: BrowserWindow | null = null;
 const output: OutputEntry[] = [];
@@ -14,6 +16,8 @@ const projects = new ProjectService();
 let settings: SettingsStore;
 let plugins: PluginManager;
 let workers: WorkerManager;
+let updates: UpdateService;
+let updateInterval: NodeJS.Timeout | undefined;
 
 function appendOutput(source: string, level: OutputEntry['level'], message: string): void {
   for (const line of message.split(/\r?\n/).filter(Boolean)) {
@@ -36,6 +40,10 @@ function snapshot(): AppSnapshot {
 
 function broadcast(): void {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('machina:snapshot', snapshot());
+}
+
+function broadcastUpdate(): void {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('machina:updateState', updates.getState());
 }
 
 async function createWindow(): Promise<void> {
@@ -150,6 +158,15 @@ function buildMenu(): void {
         { label: 'Open User Plugins Folder', click: () => void shell.openPath(join(app.getPath('userData'), 'plugins')) },
       ],
     },
+    {
+      label: 'Help',
+      submenu: [
+        { label: 'Check for Updates…', click: () => void updates.check() },
+        { type: 'separator' },
+        { label: 'Machina IDE on GitHub', click: () => void shell.openExternal('https://github.com/TararaDotJoshua/Machina_IDE') },
+        { label: 'About Machina IDE', click: () => void dialog.showMessageBox(mainWindow!, { type: 'info', title: 'About Machina IDE', message: `Machina IDE ${app.getVersion()}`, detail: 'Desktop-first mechatronics engineering workspace.' }) },
+      ],
+    },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -166,6 +183,9 @@ function registerIpc(): void {
   ipcMain.handle('machina:commands:execute', (_event, id: string, args?: unknown) => plugins.executeCommand(id, args));
   ipcMain.handle('machina:workers:cancel', (_event, id: string) => workers.cancel(id));
   ipcMain.handle('machina:ai:invoke', (_event, pluginId: string, name: string, input: unknown) => plugins.invokeTool(pluginId, name, input));
+  ipcMain.handle('machina:updates:getState', () => updates.getState());
+  ipcMain.handle('machina:updates:check', () => updates.check());
+  ipcMain.handle('machina:updates:install', () => updates.install());
 }
 
 app.whenReady().then(async () => {
@@ -173,6 +193,16 @@ app.whenReady().then(async () => {
   settings = new SettingsStore(join(userData, 'settings.json'));
   await settings.load();
   workers = new WorkerManager();
+  updates = new UpdateService(autoUpdater, {
+    packaged: app.isPackaged,
+    currentVersion: app.getVersion(),
+    log: (level, message) => appendOutput('Updater', level, message),
+    beforeInstall: async () => {
+      if (projects.current) await projects.save();
+      workers.stopAll();
+      await plugins.deactivateAll();
+    },
+  });
   const bundledRoot = app.isPackaged ? join(process.resourcesPath, 'plugins') : resolve('plugins');
   const hostRunner = app.isPackaged
     ? join(process.resourcesPath, 'plugin-runtime', 'host-runner.cjs')
@@ -190,6 +220,7 @@ app.whenReady().then(async () => {
   plugins.on('output', ({ source, level, message }) => appendOutput(source, level, message));
   workers.on('change', broadcast);
   workers.on('output', ({ source, level, message }) => appendOutput(source, level, message));
+  updates.on('change', broadcastUpdate);
   await mkdir(join(userData, 'projects'), { recursive: true });
   if (settings.lastProject) {
     try {
@@ -203,10 +234,17 @@ app.whenReady().then(async () => {
   buildMenu();
   await createWindow();
   broadcast();
+  updates.initialize();
+  broadcastUpdate();
+  if (app.isPackaged) {
+    setTimeout(() => void updates.check(), 10_000);
+    updateInterval = setInterval(() => void updates.check(), 4 * 60 * 60 * 1000);
+  }
   app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) void createWindow(); });
 });
 
 app.on('before-quit', () => {
+  if (updateInterval) clearInterval(updateInterval);
   workers?.stopAll();
   void plugins?.deactivateAll();
 });

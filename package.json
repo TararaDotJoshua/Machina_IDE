@@ -1,6 +1,6 @@
 {
   "name": "machina-ide",
-  "version": "0.2.0-beta.1",
+  "version": "0.2.0-beta.2",
   "private": true,
   "author": "Machina IDE Contributors",
   "description": "Machina IDE prerelease engineering workspace",
@@ -22,6 +22,7 @@
     "build": "npm run typecheck && npm run test && npm run build:plugins && electron-vite build",
     "package": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder",
+    "release:beta": "npm run build && electron-builder --win nsis --publish always",
     "build:plugins": "node scripts/build-plugins.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run build:plugins && vitest run",
@@ -31,13 +32,14 @@
   "dependencies": {
     "@react-three/drei": "^10.7.6",
     "@react-three/fiber": "^9.3.0",
+    "electron-updater": "^6.8.9",
     "lucide-react": "^0.542.0",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
     "semver": "^7.7.2",
     "three": "^0.179.1",
-    "zustand": "^5.0.8",
-    "zod": "^4.1.5"
+    "zod": "^4.1.5",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.34.0",
@@ -69,11 +71,30 @@
       "package.json"
     ],
     "extraResources": [
-      { "from": "dist/plugin-runtime", "to": "plugin-runtime" }
+      {
+        "from": "dist/plugin-runtime",
+        "to": "plugin-runtime"
+      }
     ],
-    "directories": { "output": "release" },
-    "win": { "target": "nsis", "signAndEditExecutable": false },
-    "mac": { "target": "dmg" },
-    "linux": { "target": "AppImage" }
+    "directories": {
+      "output": "release"
+    },
+    "publish": {
+      "provider": "github",
+      "owner": "TararaDotJoshua",
+      "repo": "Machina_IDE",
+      "channel": "beta",
+      "releaseType": "prerelease"
+    },
+    "win": {
+      "target": "nsis",
+      "artifactName": "Machina-IDE-${version}-Windows-${arch}.${ext}"
+    },
+    "mac": {
+      "target": "dmg"
+    },
+    "linux": {
+      "target": "AppImage"
+    }
   }
 }

@@ -1,5 +1,5 @@
 import { contextBridge, ipcRenderer } from 'electron';
-import type { AppSnapshot, MachinaBridge } from '@mechatronics-ide/core';
+import type { AppSnapshot, MachinaBridge, UpdateState } from '@mechatronics-ide/core';
 
 const bridge: MachinaBridge = {
   app: {
@@ -29,6 +29,16 @@ const bridge: MachinaBridge = {
   commands: { execute: (commandId, args) => ipcRenderer.invoke('machina:commands:execute', commandId, args) },
   workers: { cancel: (instanceId) => ipcRenderer.invoke('machina:workers:cancel', instanceId) },
   ai: { invoke: (pluginId, toolName, input) => ipcRenderer.invoke('machina:ai:invoke', pluginId, toolName, input) },
+  updates: {
+    getState: () => ipcRenderer.invoke('machina:updates:getState'),
+    check: () => ipcRenderer.invoke('machina:updates:check'),
+    install: () => ipcRenderer.invoke('machina:updates:install'),
+    subscribe: (listener) => {
+      const handler = (_event: Electron.IpcRendererEvent, state: UpdateState) => listener(state);
+      ipcRenderer.on('machina:updateState', handler);
+      return () => ipcRenderer.removeListener('machina:updateState', handler);
+    },
+  },
 };
 
 contextBridge.exposeInMainWorld('machina', bridge);

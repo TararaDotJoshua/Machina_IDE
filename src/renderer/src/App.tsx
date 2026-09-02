@@ -12,6 +12,7 @@ import {
   Code2,
   Command,
   Folder,
+  Download,
   Gauge,
   GitBranch,
   GripVertical,
@@ -34,7 +35,7 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import type { AppSnapshot, CommandContribution, ProjectItem } from '@mechatronics-ide/core';
+import { APP_VERSION, type AppSnapshot, type CommandContribution, type ProjectItem, type UpdateState } from '@mechatronics-ide/core';
 import { Viewport } from './Viewport';
 import { findProjectItem, getVirtualItems, useIdeStore, type VirtualItem } from './store';
 
@@ -65,7 +66,7 @@ const WORKSPACE_PRESETS: WorkspacePreset[] = [
 const ALL_WINDOWS: WorkspaceWindowId[] = ['project', 'viewer', 'electrical', 'software', 'console', 'inspector', 'extensions'];
 
 export function App(): React.JSX.Element {
-  const { snapshot, setSnapshot, paletteOpen, setPaletteOpen, notification, notify } = useIdeStore();
+  const { snapshot, setSnapshot, paletteOpen, setPaletteOpen, notification, notify, updateState, setUpdateState } = useIdeStore();
   const [presetId, setPresetId] = useState<WorkspacePresetId>('system');
   const [windowRects, setWindowRects] = useState<Partial<Record<WorkspaceWindowId, WindowRect>>>(() => createPresetRects('system'));
   const [hiddenWindows, setHiddenWindows] = useState<Set<WorkspaceWindowId>>(() => hiddenForPreset('system'));
@@ -74,6 +75,7 @@ export function App(): React.JSX.Element {
   const [tileMode, setTileMode] = useState<TileMode>('floating');
   const [windowOrder, setWindowOrder] = useState<WorkspaceWindowId[]>(() => presetWindowOrder('system'));
   const [dockPreview, setDockPreview] = useState<DockCandidate | null>(null);
+  const [dismissedUpdate, setDismissedUpdate] = useState<string | null>(null);
   const zCounter = useRef(20);
 
   const applyPreset = useCallback((nextId: WorkspacePresetId) => {
@@ -107,6 +109,11 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     void window.machina.app.getSnapshot().then(setSnapshot);
     const unsubscribe = window.machina.app.subscribe(setSnapshot);
+    void window.machina.updates.getState().then(setUpdateState);
+    const unsubscribeUpdates = window.machina.updates.subscribe((state) => {
+      setUpdateState(state);
+      if (state.status === 'downloaded') setDismissedUpdate(null);
+    });
     const unsubscribeMenu = window.machina.app.subscribeMenu((action) => {
       if (action === 'commandPalette') setPaletteOpen(true);
       if (action.startsWith('workspace:')) applyPreset(action.slice('workspace:'.length) as WorkspacePresetId);
@@ -132,8 +139,8 @@ export function App(): React.JSX.Element {
       if (event.key === 'Escape') setPaletteOpen(false);
     };
     window.addEventListener('keydown', keydown);
-    return () => { unsubscribe(); unsubscribeMenu(); window.removeEventListener('keydown', keydown); };
-  }, [applyPreset, applyTileMode, setPaletteOpen, setSnapshot, tileMode, windowOrder]);
+    return () => { unsubscribe(); unsubscribeUpdates(); unsubscribeMenu(); window.removeEventListener('keydown', keydown); };
+  }, [applyPreset, applyTileMode, setPaletteOpen, setSnapshot, setUpdateState, tileMode, windowOrder]);
 
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {
@@ -204,6 +211,7 @@ export function App(): React.JSX.Element {
       </div>
       <StatusBar />
       {paletteOpen && <CommandPalette commands={commands} />}
+      {updateState.status === 'downloaded' && dismissedUpdate !== updateState.availableVersion && <UpdatePrompt state={updateState} onLater={() => setDismissedUpdate(updateState.availableVersion ?? 'downloaded')} />}
       {notification && <div className="toast"><Sparkles size={15} />{notification}<button onClick={() => notify(null)}><X size={14} /></button></div>}
     </div>
   );
@@ -283,6 +291,7 @@ function useCommands(): CommandItem[] {
     { id: 'core.project.open', title: 'Open Project…', category: 'Project', handler: () => report(() => window.machina.project.open(), 'Project opened') },
     { id: 'core.project.save', title: 'Save Project', category: 'Project', keybinding: 'Ctrl+S', handler: () => snapshot?.project ? report(() => window.machina.project.save(), 'Project saved') : notify('No project is open') },
     { id: 'core.plugins.reload', title: 'Reload Extensions', category: 'Developer', handler: () => report(() => window.machina.plugins.reload(), 'Extensions reloaded') },
+    { id: 'core.updates.check', title: 'Check for Updates', category: 'Help', handler: async () => { const state = await window.machina.updates.check(); notify(state.message ?? 'Update check complete'); } },
     { id: 'core.palette', title: 'Show Command Palette', category: 'View', keybinding: 'Ctrl+Shift+P', handler: () => setPaletteOpen(true) },
   ];
   const contributed = (snapshot?.contributions ?? []).flatMap(({ pluginId, contributes }) =>
@@ -512,7 +521,20 @@ function StatusBar(): React.JSX.Element {
   const snapshot = useIdeStore((state) => state.snapshot);
   const running = snapshot?.workers.filter((worker) => worker.status === 'running').length ?? 0;
   const project = snapshot?.project;
-  return <footer className="status-bar"><div><span className="status-ready" /> {project ? 'Ready' : 'No project open'}</div>{project && <div><Box size={12} /> {project.activeConfiguration}</div>}<div className="status-spacer" /><div>{running ? <><span className="pulse" /> {running} task running</> : 'No active tasks'}</div>{project && <div>Saved {formatDateTime(project.updatedAt)}</div>}<div>Machina 0.2.0-beta.1</div></footer>;
+  const update = useIdeStore((state) => state.updateState);
+  return <footer className="status-bar"><div><span className="status-ready" /> {project ? 'Ready' : 'No project open'}</div>{project && <div><Box size={12} /> {project.activeConfiguration}</div>}<div className="status-spacer" />{update.status === 'checking' && <div><RefreshCw className="spin" size={11} /> Checking for updates</div>}{update.status === 'downloading' && <div><Download size={11} /> Update {Math.round(update.percent ?? 0)}%</div>}{update.status === 'downloaded' && <div><Download size={11} /> Update ready</div>}<div>{running ? <><span className="pulse" /> {running} task running</> : 'No active tasks'}</div>{project && <div>Saved {formatDateTime(project.updatedAt)}</div>}<div>Machina {APP_VERSION}</div></footer>;
+}
+
+function UpdatePrompt({ state, onLater }: { state: UpdateState; onLater(): void }): React.JSX.Element {
+  const notify = useIdeStore((store) => store.notify);
+  const install = async () => {
+    try {
+      await window.machina.updates.install();
+    } catch (error) {
+      notify(error instanceof Error ? error.message : String(error));
+    }
+  };
+  return <div className="update-prompt" role="dialog" aria-labelledby="update-title"><div className="update-icon"><Download size={22} /></div><div><strong id="update-title">Machina {state.availableVersion ?? 'update'} is ready</strong><span>Your project will be saved before Machina restarts and installs the update.</span></div><button className="secondary" onClick={onLater}>Later</button><button className="primary" onClick={() => void install()}>Restart now</button></div>;
 }
 
 function PaneHeader({ title, action }: { title: string; action?: React.ReactNode }): React.JSX.Element { return <div className="pane-header"><span>{title}</span>{action && <div>{action}</div>}</div>; }

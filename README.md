@@ -1,4 +1,4 @@
-# Machina IDE 0.2.0-beta.1
+# Machina IDE 0.2.0-beta.2
 
 Machina IDE is a desktop-first, web-portable engineering workspace for mechatronics projects. This prerelease establishes the application shell, local project format, rearrangeable window system, and extension runtime without pretending that unfinished engineering engines are available.
 
@@ -16,6 +16,14 @@ STEP import is intentionally absent. It is planned as a future first-party exten
 - Discover, validate, enable, disable, reload, and isolate user-installed extensions.
 
 No example extensions ship with this build. No mock simulation, sample project, fake terminal, fake source editor, fake geometry, or fabricated engineering result is included.
+
+## Beta updates
+
+Packaged Windows builds check the public GitHub Releases beta channel shortly after startup and every four hours. Updates download in the background; Machina then offers **Restart now** or **Later** and saves the open project before installing. Users can also run Help → Check for Updates or the corresponding command-palette action.
+
+To publish a beta, update every workspace package to the same prerelease version, commit it, and push a matching tag such as `v0.2.0-beta.3`. The `Publish Windows Beta` GitHub Actions workflow validates the tag, runs lint and the complete verified build, then publishes the NSIS installer, blockmap, and `beta.yml` as a GitHub prerelease.
+
+The beta pipeline currently permits unsigned Windows builds. Before public stable distribution, configure Authenticode credentials in GitHub Actions and require signing so downloaded installers can be verified against Machina's publisher identity.
 
 ## Run and build
 
