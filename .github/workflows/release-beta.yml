@@ -50,14 +50,17 @@ jobs:
           $version = node -p "require('./package.json').version"
           $installer = "release/Machina-IDE-$version-Windows-x64.exe"
           $blockmap = "$installer.blockmap"
-          $metadata = "release/beta.yml"
-          gh release upload "${{ github.ref_name }}" $installer $blockmap $metadata --clobber
+          $betaMetadata = "release/beta.yml"
+          $latestMetadata = "release/latest.yml"
+          Copy-Item -LiteralPath $betaMetadata -Destination $latestMetadata
+          gh release upload "${{ github.ref_name }}" $installer $blockmap $betaMetadata $latestMetadata --clobber
 
           $published = gh release view "${{ github.ref_name }}" --json assets --jq '.assets[].name'
           @(
             "Machina-IDE-$version-Windows-x64.exe",
             "Machina-IDE-$version-Windows-x64.exe.blockmap",
-            "beta.yml"
+            "beta.yml",
+            "latest.yml"
           ) | ForEach-Object {
             if ($_ -notin $published) { throw "Required release asset was not published: $_" }
           }
